@@ -20,10 +20,26 @@
 		user.forceMove(src)
 	playsound(src, 'sound/effects/bamfgas.ogg', 100, 1)
 
-/obj/item/airbag/relaymove(var/mob/user, direction)
+/obj/item/airbag/proc/eject_contents()
+	var/turf/T = get_turf(src)
+	//The airbag can land on dense piping or inside a wall. Ejecting onto that
+	//turf leaves the occupant unable to move, so look for a safe neighbour.
+	if(T && (T.density || T.has_dense_content(src)))
+		for(var/dir in cardinal)
+			var/turf/adjacent = get_step(T, dir)
+			if(adjacent && !adjacent.density && !adjacent.has_dense_content())
+				T = adjacent
+				break
 	for(var/atom/movable/AM in contents)
-		AM.forceMove(get_turf(src))
+		AM.forceMove(T)
+
+/obj/item/airbag/relaymove(var/mob/user, direction)
+	eject_contents()
 	qdel(src)
+
+/obj/item/airbag/Destroy()
+	eject_contents() //never leave occupants in nullspace if the bag is deleted
+	return ..()
 
 /obj/item/airbag/MouseDropFrom(over_object, src_location, var/turf/over_location, src_control, over_control, params)
 	if(usr.incapacitated() || usr.lying)
