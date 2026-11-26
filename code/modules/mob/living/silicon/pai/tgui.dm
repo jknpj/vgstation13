@@ -34,6 +34,18 @@
 		"laws" = pai_laws
 	)
 
+	if(SOFT_MECH in software)
+		var/list/mech_data = list("connected" = FALSE, "name" = null, "role" = null)
+		var/obj/mecha/M = get_mecha()
+		if(M)
+			mech_data["connected"] = TRUE
+			mech_data["name"] = M.name
+			if(M.occupant == src)
+				mech_data["role"] = "Pilot"
+			else if(M.pai_copilot == src)
+				mech_data["role"] = "Co-pilot"
+		data["mech"] = mech_data
+
 	var/list/available = list()
 	for(var/entry in available_software)
 		available += list(list(
@@ -86,7 +98,7 @@
 				if(painews)
 					painews.attack_hand(usr)
 				return TRUE
-			var/list/module_screens = list(SOFT_CM, SOFT_DM, SOFT_MS, SOFT_SS, SOFT_UT, SOFT_AS, SOFT_WJ, SOFT_CS, SOFT_FS, SOFT_RS, SOFT_RT, SOFT_FL, SOFT_HM, SOFT_VE, SOFT_ME)
+			var/list/module_screens = list(SOFT_CM, SOFT_DM, SOFT_MS, SOFT_SS, SOFT_UT, SOFT_AS, SOFT_WJ, SOFT_CS, SOFT_FS, SOFT_RS, SOFT_RT, SOFT_FL, SOFT_HM, SOFT_VE, SOFT_ME, SOFT_MECH)
 			if((new_screen in module_screens) && !(new_screen in software))
 				return TRUE
 			if(!(new_screen in (list("main", "directives", SOFT_BY, SOFT_UN) + module_screens)))
@@ -118,6 +130,9 @@
 		if("uninstall")
 			var/target = params["target"]
 			if(!software.Find(target) || !available_software.Find(target))
+				return TRUE
+			if(target == SOFT_MECH && get_mecha())
+				to_chat(src, "<span class='warning'>You cannot uninstall exosuit control while connected to an exosuit.</span>")
 				return TRUE
 			var/cost = available_software[target]
 			uninstall_target = target

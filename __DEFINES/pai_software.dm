@@ -16,6 +16,7 @@
 #define SOFT_XS "pai expedition tracker"
 #define SOFT_HM "holomap viewer"
 #define SOFT_ME "meson augmentation"
+#define SOFT_MECH "exosuit control"
 #define SOFT_UN "uninstall"
 #define SOFT_BY	"buy"
 

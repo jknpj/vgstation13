@@ -30,7 +30,9 @@
 	var/list/hud_list = list()
 	var/initial_icon
 	var/can_move = 1
-	var/mob/living/carbon/occupant = null
+	var/mob/living/occupant = null
+	var/mob/living/silicon/pai/pai_copilot = null
+	var/mob/living/seat_passenger = null
 	var/step_in = 10 //make a step in step_in/10 sec.
 	var/dir_in = SOUTH//What direction will the mech face when entered/powered on? Defaults to South.
 	var/step_energy_drain = 10 //How much energy we consume in a single step
@@ -151,6 +153,8 @@
 	icon_state += "-open"
 
 /obj/mecha/Destroy()
+	if(pai_copilot)
+		pai_disconnect(pai_copilot)
 	go_out(loc, TRUE)
 	var/turf/T = get_turf(src)
 	tag = "\ref[src]" //better safe then sorry
@@ -864,6 +868,13 @@
 			to_chat(user, "[src]-[device_name] interface initialization failed.")
 		return
 
+	if(istype(W, /obj/item/device/paicard))
+		if(pai_move_inside(W, user))
+			to_chat(user, "[src]-pAI interface initialized successfully")
+		else
+			to_chat(user, "[src]-pAI interface initialization failed.")
+		return
+
 	if(istype(W, /obj/item/mecha_parts/mecha_equipment))
 		var/obj/item/mecha_parts/mecha_equipment/E = W
 		spawn()
@@ -1126,7 +1137,7 @@
 	set popup_menu = 0
 	if(!src.occupant)
 		return
-	if(usr!=src.occupant)
+	if(!is_mech_operator(usr))
 		return
 	var/obj/machinery/atmospherics/unary/portables_connector/possible_port = locate(/obj/machinery/atmospherics/unary/portables_connector/) in loc
 	if(possible_port)
@@ -1149,7 +1160,7 @@
 	set popup_menu = 0
 	if(!src.occupant)
 		return
-	if(usr!=src.occupant)
+	if(!is_mech_operator(usr))
 		return
 	if(disconnect())
 		src.occupant_message("<span class='notice'>[name] disconnects from the port.</span>")
@@ -1163,7 +1174,7 @@
 	set category = "Exosuit Interface"
 	set src = usr.loc
 	set popup_menu = 0
-	if(usr!=occupant)
+	if(!is_mech_operator(usr))
 		return
 	lights = !lights
 	if(lights)
@@ -1181,16 +1192,15 @@
 	set category = "Exosuit Interface"
 	set src = usr.loc
 	set popup_menu = 0
-	if(usr!=src.occupant)
+	if(!is_mech_operator(usr))
 		return
 	cursor_enabled = !cursor_enabled
-	if(cursor_enabled)
-		if(src.occupant && src.occupant.client)
-			src.occupant.client.mouse_pointer_icon = file("icons/mouse/mecha_mouse.dmi")
-	else
-		if(src.occupant && src.occupant.client)
-			src.occupant.client.mouse_pointer_icon = initial(src.occupant.client.mouse_pointer_icon)
-	src.occupant_message("Toggled cursor [cursor_enabled?"on":"off"].")
+	if(usr.client)
+		if(cursor_enabled)
+			usr.client.mouse_pointer_icon = file("icons/mouse/mecha_mouse.dmi")
+		else
+			usr.client.mouse_pointer_icon = initial(usr.client.mouse_pointer_icon)
+	to_chat(usr, "Toggled cursor [cursor_enabled?"on":"off"].")
 	log_message("Toggled cursor [cursor_enabled?"on":"off"].")
 	return
 
@@ -1200,7 +1210,7 @@
 	set category = "Exosuit Interface"
 	set src = usr.loc
 	set popup_menu = 0
-	if(usr!=src.occupant)
+	if(!is_mech_operator(usr))
 		return
 	use_internal_tank = !use_internal_tank
 	src.occupant_message("Now taking air from [use_internal_tank?"internal airtank":"environment"].")
@@ -1368,15 +1378,247 @@
 	else
 		return 0
 
+////////////////////////////////////
+///////  pAI pilot support  ////////
+////////////////////////////////////
+
+/obj/mecha/proc/pai_move_inside(var/obj/item/device/paicard/card as obj, mob/user as obj)
+	if(!card || !card.pai)
+		to_chat(user, "No pAI personality detected in \the [card].")
+		return 0
+	var/mob/living/silicon/pai/pai = card.pai
+	if(!pai.client)
+		to_chat(user, "\The [pai] is currently inactive.")
+		return 0
+	if(pai == occupant || pai == pai_copilot)
+		to_chat(user, "\The [pai] is already connected to \the [src].")
+		return 0
+	if(pai.stat == DEAD)
+		to_chat(user, "Beta-rhythm below acceptable level.")
+		return 0
+	if(!(SOFT_MECH in pai.software))
+		to_chat(user, "\The [pai] does not have exosuit control software installed.")
+		to_chat(pai, "<span class='warning'>You lack the exosuit control software needed to interface with \the [src].</span>")
+		return 0
+	if(dna)
+		to_chat(user, "The DNA-lock rejects \the [card].")
+		return 0
+	if(occupant && pai_copilot)
+		to_chat(user, "\The [src] already has both a pilot and a co-pilot.")
+		return 0
+	if(state)
+		to_chat(user, "<span class='red'>Maintenance protocols in effect.</span>")
+		return 0
+
+	visible_message("<span class='notice'>\The [user] starts to insert \the [card] into \the [src].</span>")
+	if(do_after(user, src, 40))
+		if(!card || card.pai != pai || pai.stat == DEAD || (occupant && pai_copilot) || dna)
+			to_chat(user, "\The [src] rejects \the [card].")
+			return 0
+		return pai_moved_inside(card, user)
+	to_chat(user, "You stop inserting \the [card].")
+	return 0
+
+/obj/mecha/proc/pai_moved_inside(var/obj/item/device/paicard/card, mob/user)
+	if(isnull(src.loc) || !card || !card.pai || !(user in range(1)))
+		return 0
+	var/mob/living/silicon/pai/pai = card.pai
+	var/atom/old_loc = card.loc
+	user.drop_from_inventory(card)
+	if(istype(old_loc, /obj/item/device/pda))
+		var/obj/item/device/pda/pda = old_loc
+		if(pda.pai == card)
+			pda.pai = null
+	card.forceMove(src)
+	if(!(card in mech_parts))
+		mech_parts.Add(card)
+	pai.forceMove(src)
+	pai.reset_view(src)
+	pai.mech_add_interface_verbs()
+
+	if(occupant)
+		pai_copilot = pai
+		log_message("[pai] moved in as co-pilot.")
+		to_chat(pai, "<span class='notice'>You interface with \the [src] as a co-pilot. [occupant] is currently piloting.</span>")
+		to_chat(occupant, "<span class='notice'>[pai] has connected to \the [src] as a co-pilot.</span>")
+	else
+		occupant = pai
+		add_fingerprint(user)
+		icon_state = initial_icon
+		dir = dir_in
+		if(!lights) //if the main lights are off, turn on cabin lights
+			light_power = light_brightness_off
+			set_light(light_range_off)
+		if(!hasInternalDamage())
+			pai << sound('sound/mecha/nominalsyndi.ogg', volume=50)
+		if(pai.client && cursor_enabled)
+			pai.client.mouse_pointer_icon = file("icons/mouse/mecha_mouse.dmi")
+		refresh_spells()
+		log_message("[pai] moved in as pilot.")
+		to_chat(pai, "<span class='notice'>You interface with \the [src] and take the pilot's seat.</span>")
+
+	update_assume_control_verb()
+	visible_message("<span class='notice'>\The [user] inserts \the [card] into \the [src].</span>")
+	playsound(src, 'sound/mecha/mechentry.ogg', 50, 1)
+	for (var/datum/faction/F in factions_with_hud_icons)
+		F.update_hud_icons()
+	return 1
+
+/obj/mecha/proc/restore_passenger(var/turf/exit, var/exploding = FALSE)
+	if(!seat_passenger)
+		return 0
+	var/mob/living/passenger = seat_passenger
+	seat_passenger = null
+	if(exploding)
+		if(exit)
+			passenger.forceMove(exit)
+		return 1
+	occupant = passenger
+	icon_state = initial_icon
+	dir = dir_in
+	if(!lights)
+		light_power = light_brightness_off
+		set_light(light_range_off)
+	if(passenger.client && cursor_enabled)
+		passenger.client.mouse_pointer_icon = file("icons/mouse/mecha_mouse.dmi")
+	refresh_spells()
+	log_message("[passenger] returned to the pilot's seat.")
+	to_chat(passenger, "<span class='notice'>You return to the pilot's seat of \the [src].</span>")
+	return 1
+
+/obj/mecha/proc/update_assume_control_verb()
+	if(pai_copilot || seat_passenger)
+		if(!(/obj/mecha/verb/assume_control in verbs))
+			verbs.Add(/obj/mecha/verb/assume_control)
+	else
+		verbs.Remove(/obj/mecha/verb/assume_control)
+
+/obj/mecha/proc/take_control(var/mob/living/user as mob)
+	if(!user || user == occupant || user.loc != src)
+		return 0
+	if(lock_controls)
+		to_chat(user, "<span class='warning'>The controls of \the [src] are locked.</span>")
+		return 0
+	if(user.isUnconscious() || user.stat == DEAD)
+		to_chat(user, "<span class='notice'>You are in no condition to take the controls of \the [src].</span>")
+		return 0
+	var/is_copilot = (user == pai_copilot)
+	var/is_passenger = (user == seat_passenger)
+	if(!is_copilot && !is_passenger)
+		to_chat(user, "<span class='notice'>You are not connected to \the [src]'s control system.</span>")
+		return 0
+	if(occupant)
+		var/occupant_piloting = (occupant.client && occupant.stat != DEAD && !occupant.isUnconscious())
+		// A displaced pilot may always reclaim the seat from the pAI that took over.
+		if(occupant_piloting && !(is_passenger && ispAI(occupant)))
+			to_chat(user, "<span class='notice'>\The [occupant] is actively piloting \the [src].</span>")
+			return 0
+		remove_mech_spells()
+		if(ispAI(occupant))
+			var/mob/living/silicon/pai/old_pai = occupant
+			pai_copilot = old_pai
+			if(old_pai.client)
+				old_pai.client.mouse_pointer_icon = initial(old_pai.client.mouse_pointer_icon)
+			to_chat(old_pai, "<span class='notice'>You relinquish the pilot's seat and remain connected to \the [src] as a co-pilot.</span>")
+		else
+			seat_passenger = occupant
+			if(occupant.client)
+				occupant.client.mouse_pointer_icon = initial(occupant.client.mouse_pointer_icon)
+			to_chat(occupant, "<span class='notice'>You are moved to the passenger seat as [user] takes the controls of \the [src].</span>")
+	if(is_copilot)
+		pai_copilot = null
+	if(is_passenger)
+		seat_passenger = null
+	occupant = user
+	icon_state = initial_icon
+	dir = dir_in
+	if(!lights)
+		light_power = light_brightness_off
+		set_light(light_range_off)
+	if(user.client && cursor_enabled)
+		user.client.mouse_pointer_icon = file("icons/mouse/mecha_mouse.dmi")
+	refresh_spells()
+	log_message("[user] assumed control.")
+	to_chat(user, "<span class='notice'>You assume control of \the [src].</span>")
+	update_assume_control_verb()
+	for (var/datum/faction/F in factions_with_hud_icons)
+		F.update_hud_icons()
+	return 1
+
+/obj/mecha/verb/assume_control()
+	set name = "Assume Control"
+	set category = "Exosuit Interface"
+	set src = usr.loc
+	set popup_menu = 0
+	src.take_control(usr)
+
+/obj/mecha/proc/pai_step_down(var/mob/living/silicon/pai/pai)
+	if(!pai || pai != occupant)
+		return 0
+	remove_mech_spells()
+	if(pai.client)
+		pai.client.mouse_pointer_icon = initial(pai.client.mouse_pointer_icon)
+	pai.reset_view()
+	pai_copilot = pai
+	log_message("[pai] stepped down to co-pilot.")
+	to_chat(pai, "<span class='notice'>You relinquish the pilot's seat of \the [src] and remain connected as a co-pilot.</span>")
+	if(seat_passenger)
+		restore_passenger()
+		update_assume_control_verb()
+		for (var/datum/faction/F in factions_with_hud_icons)
+			F.update_hud_icons()
+		return 1
+	occupant = null
+	icon_state = initial_icon + "-open"
+	if(!lights)
+		set_light(0)
+	dir = dir_in
+	update_assume_control_verb()
+	for (var/datum/faction/F in factions_with_hud_icons)
+		F.update_hud_icons()
+	return 1
+
+/obj/mecha/proc/pai_disconnect(var/mob/living/silicon/pai/pai)
+	if(!pai)
+		return 0
+	if(pai == occupant)
+		go_out()
+		pai.mech_remove_interface_verbs()
+		return 1
+	if(pai != pai_copilot)
+		return 0
+	var/obj/item/device/paicard/card = pai.card
+	if(!card)
+		return 0
+	pai_copilot = null
+	pai.mech_remove_interface_verbs()
+	pai.reset_view()
+	mech_parts.Remove(card)
+	var/turf/T = get_step(src, dir)
+	if(!isturf(T) || is_blocked_turf(T))
+		T = get_turf(src)
+	card.forceMove(T)
+	pai.forceMove(card)
+	log_message("[pai] disconnected as co-pilot.")
+	visible_message("<span class='notice'>\The [card] pops out of \the [src].</span>")
+	to_chat(pai, "<span class='notice'>You disconnect from \the [src].</span>")
+	update_assume_control_verb()
+	for (var/datum/faction/F in factions_with_hud_icons)
+		F.update_hud_icons()
+	return 1
+
+/obj/mecha/proc/is_mech_operator(var/mob/user)
+	return (user && (user == occupant || user == pai_copilot))
+
 /obj/mecha/verb/view_stats()
 	set name = "View Stats"
 	set category = "Exosuit Interface"
 	set src = usr.loc
 	set popup_menu = 0
-	if(usr!=src.occupant)
+	if(!is_mech_operator(usr))
 		return
 	//pr_update_stats.start()
-	src.occupant << browse(src.get_stats_html(), "window=exosuit")
+	usr << browse(src.get_stats_html(), "window=exosuit")
 	return
 
 /*
@@ -1395,6 +1637,8 @@
 	set popup_menu = 0
 
 	if(usr != occupant)
+		if(usr == pai_copilot)
+			src.pai_disconnect(usr)
 		return
 	src.go_out()
 	add_fingerprint(usr)
@@ -1405,9 +1649,10 @@
 	set category = "Exosuit Interface"
 	set src = usr.loc
 	set popup_menu = 0
-	if(usr != src.occupant)
+	if(!is_mech_operator(usr))
 		return
 	lock_dir = !lock_dir
+	to_chat(usr, "Direction lock [lock_dir ? "engaged" : "disengaged"].")
 
 /obj/mecha/MouseDropFrom(over_object, src_location, var/turf/over_location, src_control, over_control, params)
 	if(!Adjacent(over_location))
@@ -1448,13 +1693,21 @@
 		O.forceMove(loc) //Somehow got inside, drop it.
 
 /obj/mecha/Exited(var/atom/movable/O) // Used for teleportation from within the mecha.
+	if (O == pai_copilot)
+		pai_copilot = null
+	if (O == seat_passenger)
+		seat_passenger = null
+		update_assume_control_verb()
 	if (O == occupant)
 		occupant << browse(null, "window=exosuit")
 		remove_mech_spells()
 		if(occupant.client)
 			occupant.client.mouse_pointer_icon = initial(occupant.client.mouse_pointer_icon)
+		if(ispAI(occupant))
+			var/mob/living/silicon/pai/pai = occupant
+			pai.mech_remove_interface_verbs()
 		//open topped handling
-		if(!enclosed)
+		if(!enclosed && !ispAI(occupant))
 			handle_vis_exit()
 		occupant = null
 		icon_state = initial_icon+"-open"
@@ -1477,7 +1730,11 @@
 				break
 
 	var/atom/movable/mob_container
-	if(ishuman(occupant))
+	var/mob/living/silicon/pai/pai_occupant
+	if(ispAI(occupant))
+		pai_occupant = occupant
+		mob_container = pai_occupant.card ? pai_occupant.card : pai_occupant
+	else if(ishuman(occupant))
 		mob_container = occupant
 	else if(isbrain(occupant))
 		var/mob/living/carbon/brain/brain = occupant
@@ -1493,7 +1750,7 @@
 		occupant << browse(null, "window=exosuit")
 
 		//open topped handling
-		if(!enclosed)
+		if(!enclosed && !pai_occupant)
 			handle_vis_exit()
 
 		//change the cursor
@@ -1511,14 +1768,27 @@
 			mmi.mecha = null
 			verbs += /obj/mecha/verb/eject
 
+		if(pai_occupant)
+			if(pai_occupant.card)
+				mech_parts.Remove(pai_occupant.card)
+				pai_occupant.forceMove(pai_occupant.card)
+			else
+				pai_occupant.forceMove(exit)
+			to_chat(pai_occupant, "<span class='notice'>You disconnect from \the [src].</span>")
+
 		occupant = null
-		icon_state = initial_icon+"-open"
-		if(!lights) //if the lights are off, turn off the cabin lights
-			set_light(0)
-		dir = dir_in
+		if(!restore_passenger(exit, exploding))
+			icon_state = initial_icon+"-open"
+			if(!lights) //if the lights are off, turn off the cabin lights
+				set_light(0)
+			dir = dir_in
 		if(G)
 			G.hud_off()
 
+	if(pai_copilot && !occupant && !exploding)
+		take_control(pai_copilot)
+
+	update_assume_control_verb()
 	for (var/datum/faction/F in factions_with_hud_icons)
 		F.update_hud_icons()
 
@@ -1916,7 +2186,7 @@
 			return
 		go_out()
 	if(href_list["toggle_lights"])
-		if(usr != src.occupant)
+		if(!is_mech_operator(usr))
 			return
 		src.toggle_lights()
 		return
@@ -1926,7 +2196,7 @@
 		src.toggle_cursor()
 		return
 	if(href_list["toggle_airtank"])
-		if(usr != src.occupant)
+		if(!is_mech_operator(usr))
 			return
 		src.toggle_internal_tank()
 		return
@@ -2070,6 +2340,9 @@
 		return
 	if(href_list["dna_lock"])
 		if(usr != src.occupant)
+			return
+		if(ispAI(src.occupant))
+			src.occupant_message("<span class='warning'>\The [src] cannot sample DNA from a pAI.</span>")
 			return
 		if(src.occupant && (!istype(src.occupant, /obj/item/device/mmi/posibrain) || !istype(src.occupant, /obj/item/device/mmi)))
 			src.dna = src.occupant.dna.unique_enzymes

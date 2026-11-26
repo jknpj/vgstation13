@@ -118,6 +118,11 @@ type Data = {
   holomap?: {
     mode?: string;
   };
+  mech?: {
+    connected?: BooleanLike;
+    name?: string | null;
+    role?: string | null;
+  };
 };
 
 const SCREEN_TITLES: Record<string, string> = {
@@ -140,8 +145,8 @@ const SCREEN_TITLES: Record<string, string> = {
   'holomap viewer': 'Holomap Viewer',
   'volume enhancer': 'Volume Enhancer',
   'meson augmentation': 'Meson Firmware',
+  'exosuit control': 'Exosuit Control',
 };
-
 const ScreenButton = (props: {
   current: string;
   screen: string;
@@ -215,6 +220,7 @@ export const PaiOS = () => {
   const ram = data.ram || 0;
   const uninstall = data.uninstall || { progress: -1 };
   const available = data.available || [];
+  const mech = data.mech || {};
 
   const renderContent = () => {
     switch (screen) {
@@ -767,6 +773,30 @@ export const PaiOS = () => {
           </>
         );
 
+      case 'exosuit control':
+        return (
+          <>
+            <Box>
+              This module lets the pAI connect to a compatible exosuit as a
+              co-pilot, and assume control when the pilot is away or
+              incapacitated.
+            </Box>
+            <Box mt={1}>
+              Use a pAI card on an exosuit to install it. While connected, the
+              exosuit verbs are available to the pAI, and the pilot can use
+              Assume Control to hand over the seat.
+            </Box>
+            <Box mt={1}>
+              Status:{' '}
+              <b>
+                {mech.connected
+                  ? `${mech.role || 'Connected'} - ${mech.name}`
+                  : 'Not connected'}
+              </b>
+            </Box>
+          </>
+        );
+
       default:
         return <NoticeBox>Unknown module screen.</NoticeBox>;
     }
@@ -927,6 +957,13 @@ export const PaiOS = () => {
                     current={screen}
                     screen="meson augmentation"
                     label="Mesons Augmentation"
+                  />
+                )}
+                {has('exosuit control') && (
+                  <ScreenButton
+                    current={screen}
+                    screen="exosuit control"
+                    label="Exosuit Control"
                   />
                 )}
 

@@ -272,6 +272,47 @@ Pressure: [env.pressure]"}
 			paiController.pai_candidates.Remove(candidate)
 	feedback_add_details("admin_verb","MPAI") //If you are copy-pasting this, ensure the 2nd parameter is unique to the new proc!
 
+/client/proc/makepAI_self()
+	set category = "Fun"
+	set name = "Make pAI (Self)"
+	set desc = "Spawn a pAI card and put yourself in it, for testing."
+
+	if(!check_rights(R_ADMIN))
+		return
+
+	var/turf/T = get_turf(usr)
+	var/obj/mecha/test_mech = locate(/obj/mecha) in range(1, T)
+	var/test_mode = input(usr, "How should the test pAI be set up?", "Test pAI", "Card only") in list("Card only", "Pilot an exosuit", "Co-pilot an exosuit")
+	if(!test_mode)
+		return
+	if(test_mode != "Card only" && !test_mech)
+		test_mech = new /obj/mecha/working/ripley(T)
+	if(test_mode == "Co-pilot an exosuit" && test_mech && !test_mech.occupant)
+		var/mob/living/carbon/human/dummy/test_pilot = new(T)
+		test_pilot.name = "Test Pilot"
+		test_pilot.real_name = "Test Pilot"
+		test_pilot.forceMove(test_mech)
+		test_mech.occupant = test_pilot
+		test_mech.icon_state = test_mech.initial_icon
+		test_mech.dir = test_mech.dir_in
+	var/obj/item/device/paicard/card = new(T)
+	var/mob/living/silicon/pai/pai = new(card)
+	var/pai_name = input(usr, "Enter your pAI name:", "pAI Name", "Test pAI") as text
+	if(!pai_name)
+		pai_name = "Test pAI"
+	var/grant_software = input(usr, "Grant all pAI software for testing?", "Test software", "No") in list("No", "Yes")
+	pai.name = pai_name
+	pai.real_name = pai_name
+	pai.key = src.key
+	card.setPersonality(pai)
+	if(grant_software == "Yes")
+		for(var/software_id in pai.available_software)
+			if(!(software_id in pai.software))
+				pai.software.Add(software_id)
+	if(test_mech && test_mode != "Card only")
+		test_mech.pai_moved_inside(card, usr)
+	feedback_add_details("admin_verb","MPAISELF")
+
 /client/proc/cmd_admin_alienize(var/mob/M in mob_list)
 	set category = "Fun"
 	set name = "Make Alien"

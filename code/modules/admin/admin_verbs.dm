@@ -131,6 +131,7 @@ var/list/admin_verbs_fun = list(
 	/client/proc/smissmas,
 	/client/proc/achievement,
 	/client/proc/makepAI,
+	/client/proc/makepAI_self,
 	/client/proc/set_blob_looks,
 	/client/proc/set_teleport_pref,
 	/client/proc/deadchat_singularity,

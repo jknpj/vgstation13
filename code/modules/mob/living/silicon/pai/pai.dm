@@ -304,6 +304,12 @@
 		CtrlClickOn(A)
 		return
 
+	var/obj/mecha/M = get_mecha()
+	if(M)
+		if(M.occupant == src)
+			M.click_action(A, src)
+		return
+
 	if(istype(card.loc, /obj))
 		var/obj/O = card.loc
 		if(O.integratedpai == card)
@@ -376,12 +382,78 @@
 /mob/living/silicon/pai/relaymove(dir)
 	if(incapacitated())
 		return
+	if(istype(loc, /obj/mecha))
+		var/obj/mecha/M = loc
+		if(M.occupant == src)
+			M.relaymove(src, dir)
+		return
 	if(istype(card.loc, /obj))
 		var/obj/O = card.loc
 		if(O.integratedpai == card)
 			O.pAImove(src, dir)
 	if (holomap_device)
 		holomap_device.update_holomap()
+
+/mob/living/silicon/pai/proc/get_mecha()
+	if(istype(loc, /obj/mecha))
+		return loc
+	if(card && istype(card.loc, /obj/mecha))
+		return card.loc
+	return null
+
+/mob/living/silicon/pai/proc/mech_add_interface_verbs()
+	if(!(/mob/living/silicon/pai/verb/mech_disconnect in verbs))
+		verbs.Add(/mob/living/silicon/pai/verb/mech_disconnect)
+	if(!(/mob/living/silicon/pai/verb/mech_relinquish in verbs))
+		verbs.Add(/mob/living/silicon/pai/verb/mech_relinquish)
+
+/mob/living/silicon/pai/proc/mech_remove_interface_verbs()
+	verbs.Remove(/mob/living/silicon/pai/verb/mech_disconnect)
+	verbs.Remove(/mob/living/silicon/pai/verb/mech_relinquish)
+
+/mob/living/silicon/pai/verb/mech_disconnect()
+	set name = "Disconnect from Exosuit"
+	set category = "Exosuit Interface"
+
+	if(incapacitated())
+		return
+	var/obj/mecha/M = get_mecha()
+	if(!M)
+		return
+	M.pai_disconnect(src)
+	mech_remove_interface_verbs()
+	add_fingerprint(usr)
+
+/mob/living/silicon/pai/verb/mech_relinquish()
+	set name = "Relinquish Exosuit Controls"
+	set category = "Exosuit Interface"
+
+	if(incapacitated())
+		return
+	var/obj/mecha/M = get_mecha()
+	if(!M)
+		return
+	if(M.occupant != src)
+		to_chat(src, "<span class='notice'>You are not piloting \the [M].</span>")
+		return
+	M.pai_step_down(src)
+
+/mob/living/silicon/pai/Destroy()
+	if(istype(loc, /obj/mecha))
+		var/obj/mecha/M = loc
+		if(M.occupant == src)
+			M.restore_passenger()
+	..()
+
+/mob/living/silicon/pai/GetAccess()
+	if(istype(loc, /obj/mecha))
+		return list()
+	return ..()
+
+/mob/living/silicon/pai/hasFullAccess()
+	if(istype(loc, /obj/mecha))
+		return FALSE
+	return ..()
 
 /atom/proc/attack_pai(mob/user as mob)
 	return

@@ -17,7 +17,8 @@
 															SOFT_ME = 10,
 															SOFT_PS = 10,
 															SOFT_XS = 10,
-															SOFT_HM = 25
+															SOFT_HM = 25,
+															SOFT_MECH = 50
 
 															)
 
