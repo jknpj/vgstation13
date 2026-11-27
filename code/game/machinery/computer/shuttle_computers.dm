@@ -201,6 +201,8 @@ var/list/shuttle_control_themes = list(
 /obj/machinery/computer/shuttle_control/Destroy()
 	if(disk)
 		QDEL_NULL(disk)
+	if(shuttle)
+		shuttle.control_consoles -= src
 
 	..()
 

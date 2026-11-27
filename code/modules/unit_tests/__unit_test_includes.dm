@@ -20,6 +20,7 @@
 #include "vector.dm"
 #include "reagent_ids.dm"
 #include "smelting.dm"
+#include "shuttle_console_destroy.dm"
 #include "supermatter_airflow.dm"
 #include "languages.dm"
 #include "hour_calculations.dm"

@@ -500,7 +500,7 @@
 			var/obj/docking_port/destination/initial_d = destination_port
 			if(transit_timeout > 0)
 				spawn(transit_timeout)
-					if(destination_port && initial_d == destination_port && current_port == transit_port)
+					if(!control_consoles.len || (destination_port && initial_d == destination_port && current_port == transit_port))
 						log_game("[name] ([type]) timed out in transit after [transit_timeout / 10] seconds, returning to previous port.")
 						var/obj/docking_port/destination/return_port = previous_port
 						destination_port = null
