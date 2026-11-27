@@ -794,7 +794,8 @@
 		return exchange_parts(user, W)
 
 	else
-		if(W.force > 0)
+		// Containers spilling their contents into the chassis short it out, even if the container itself does no damage.
+		if(W.force > 0 || (istype(W, /obj/item/weapon/reagent_containers) && W.is_open_container() && W.reagents?.total_volume))
 			spark(src, 5, FALSE)
 		if(stat == DEAD && W.force > 15)
 			visible_message("<span class='danger'>[user] begins ripping [src] apart with \the [W]!")
