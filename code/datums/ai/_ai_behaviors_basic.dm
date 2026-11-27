@@ -284,6 +284,13 @@
 	var/atom/picked = source.pick_target(controller, pawn, source.find_targets(controller, pawn, search_range))
 	if(!picked)
 		controller.blackboard.Remove(target_key)
+		// Legacy LoseAggro(): once there is nothing to fight, resume looking for
+		// objects (nurse spiders go back to cocooning, mining drones to mining).
+		if(istype(pawn, /mob/living/simple_animal/hostile))
+			var/mob/living/simple_animal/hostile/hostile_pawn = pawn
+			if(hostile_pawn.ai_search_objects_suspended)
+				hostile_pawn.search_objects = initial(hostile_pawn.search_objects)
+				hostile_pawn.ai_search_objects_suspended = FALSE
 		return AI_BEHAVIOR_FAILED
 
 	controller.blackboard[target_key] = picked

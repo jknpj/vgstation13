@@ -24,6 +24,9 @@
 	var/retreat_distance = null //If our mob runs from players when they're too close, set in tile distance. By default, mobs do not retreat.
 	var/minimum_distance = 1 //Minimum approach distance, so ranged mobs chase targets down, but still keep their distance set in tiles to the target, set higher to make mobs keep distance
 	var/search_objects = 0 //If we want to consider objects when searching around, set this to 1. If you want to search for objects while also ignoring mobs until hurt, set it to 2. To completely ignore mobs, even when attacked, set it to 3
+	/// TRUE when adjustBruteLoss() suspended object searching for a fight. The
+	/// behavior tree restores it once the mob has no target left (LoseAggro()).
+	var/ai_search_objects_suspended = FALSE
 	var/list/wanted_objects = list() //A list of objects that will be checked against to attack, should we have search_objects enabled
 	var/stat_attack = 0 //Mobs with stat_attack to 1 will attempt to attack things that are unconscious, Mobs with stat_attack set to 2 will attempt to attack the dead.
 	var/stat_exclusive = 0 //Mobs with this set to 1 will exclusively attack things defined by stat_attack, stat_attack 2 means they will only attack corpses
@@ -391,18 +394,26 @@
 
 /mob/living/simple_animal/hostile/adjustBruteLoss(var/damage)
 	..(damage)
-	if(!stat && search_objects < 3 && !ai_controller)//Not unconscious, and we don't ignore mobs
-		if(search_objects)//Turn off item searching and ignore whatever item we were looking at, we're more concerned with fight or flight
-			search_objects = 0
-			target = null
-		if(stance == HOSTILE_STANCE_IDLE)//If we took damage while idle, immediately attempt to find the source of it so we find a living target
-			Aggro()
+	if(stat || search_objects >= 3)//Not unconscious, and we don't ignore mobs
+		return
+	if(search_objects)//Turn off item searching and ignore whatever item we were looking at, we're more concerned with fight or flight
+		ai_search_objects_suspended = !isnull(ai_controller)
+		search_objects = 0
+		target = null
+		// The tree keeps its target on the blackboard, not in target.
+		if(ai_controller)
+			ai_controller.clear_blackboard_key(BB_TARGET)
+	if(ai_controller)//The tree acquires the next target itself on the next poll
+		Aggro()
+		return
+	if(stance == HOSTILE_STANCE_IDLE)//If we took damage while idle, immediately attempt to find the source of it so we find a living target
+		Aggro()
+		var/new_target = FindTarget()
+		GiveTarget(new_target)
+	if(stance == HOSTILE_STANCE_ATTACK)//No more pulling a mob forever and having a second player attack it, it can switch targets now if it finds a more suitable one
+		if(target != null && prob(25))
 			var/new_target = FindTarget()
 			GiveTarget(new_target)
-		if(stance == HOSTILE_STANCE_ATTACK)//No more pulling a mob forever and having a second player attack it, it can switch targets now if it finds a more suitable one
-			if(target != null && prob(25))
-				var/new_target = FindTarget()
-				GiveTarget(new_target)
 
 /mob/living/simple_animal/hostile/proc/AttackTarget()
 
