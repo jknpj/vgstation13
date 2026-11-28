@@ -326,13 +326,12 @@
 	if(isanimal(M) || ismonkey(M))
 		if(istype(M,/mob/living/simple_animal/hostile))
 			var/mob/living/simple_animal/hostile/H = M
-			switch(H.stance)
-				if(HOSTILE_STANCE_ATTACK,HOSTILE_STANCE_ATTACKING)
-					if(istype(M,/mob/living/simple_animal/hostile/retaliate/goat))
-						var/mob/living/simple_animal/hostile/retaliate/goat/G = M
-						G.Calm()
-					else
-						return
+			if(H.ai_has_target())
+				if(istype(M,/mob/living/simple_animal/hostile/retaliate/goat))
+					var/mob/living/simple_animal/hostile/retaliate/goat/G = M
+					G.Calm()
+				else
+					return
 		M.start_walk_to(get_turf(data["source"]),1,6)
 
 /datum/reagent/incense/booze

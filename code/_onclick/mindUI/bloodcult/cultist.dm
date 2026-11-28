@@ -696,15 +696,14 @@
 			if (H.passive)
 				name = "Passive"
 				icon_state = "hexcontrol_passive"
-				H.stance = HOSTILE_STANCE_IDLE
+				H.LoseTarget()
 				H.target = null
 			else
 				name = "Aggressive"
 				icon_state = "hexcontrol_harm"
 				var/new_target = H.FindTarget()
-				H.GiveTarget(new_target)
-				if (H.target)
-					H.MoveToTarget()
+				if (new_target)
+					H.GiveTarget(new_target)
 			base_icon_state = icon_state
 
 /obj/abstract/mind_ui_element/hoverable/hex_controller/harm/UpdateIcon()

@@ -67,7 +67,7 @@
 /mob/living/simple_animal/hostile/giant_spider/spiderling/Aggro()
 	..()
 
-	stance = HOSTILE_STANCE_ATTACK
+
 	retreat_distance = 10
 	minimum_distance = 10
 	search_objects = 1
@@ -78,7 +78,7 @@
 	retreat_distance = 0
 	minimum_distance = 0
 	search_objects = 0
-	stance = HOSTILE_STANCE_IDLE
+
 
 /mob/living/simple_animal/hostile/giant_spider/spiderling/Life()
 	if(timestopped)
@@ -124,7 +124,7 @@
 	retreat_distance = 0
 	minimum_distance = 0
 	search_objects = 0
-	stance = HOSTILE_STANCE_IDLE
+
 	vision_range = idle_vision_range
 
 /mob/living/simple_animal/hostile/giant_spider/spiderling/proc/growth()

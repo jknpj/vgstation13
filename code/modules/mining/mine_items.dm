@@ -580,7 +580,7 @@
 	if(iswelder(I))
 		var/obj/item/tool/weldingtool/W = I
 		if(W.welding && !stat)
-			if(stance != HOSTILE_STANCE_IDLE)
+			if(is_legacy_engaged())
 				to_chat(user, "<span class='warning'>\The [src] is moving around too much to repair!</span>")
 				return
 			if(maxHealth == health)

@@ -12,6 +12,10 @@
 	var/alist/blackboard = alist()
 	/// Roots of the behavior trees this controller runs.
 	var/list/behavior_nodes = null
+	/// First acquire_target leaf in the resolved tree. Gameplay code that needs a
+	/// target immediately (hostile FindTarget()) runs this once instead of
+	/// scanning again with the legacy pipeline.
+	var/datum/bt_node/ai_behavior/acquire_target/default_acquire_node = null
 	/// Runtime override slots (assoc override_id -> /datum/bt_node/subtree).
 	var/list/override_slots = null
 	/// Decorators that poll their condition because vg has no DCS signals.
@@ -173,9 +177,13 @@
 	polling_observers = null
 	var/list/to_visit = behavior_nodes.Copy()
 	var/index = 1
+	var/datum/bt_node/ai_behavior/acquire_target/found_acquire = null
 	while(index <= length(to_visit))
 		var/datum/bt_node/node = to_visit[index++]
 		node.finalize_node(src, to_visit)
+		if(isnull(found_acquire) && istype(node, /datum/bt_node/ai_behavior/acquire_target))
+			found_acquire = node
+	default_acquire_node = found_acquire
 	var/counter = 1
 	for(var/datum/bt_node/root in behavior_nodes)
 		counter = root.assign_execution_indices(counter)
@@ -325,6 +333,15 @@
 		else
 			converted[key] = value
 	return converted
+
+/// Runs the tree's target acquisition once and returns the stored target.
+/// Gameplay code (hostile FindTarget()) uses this when it needs an answer
+/// immediately instead of waiting for the next planning tick.
+/datum/ai_controller/proc/find_target_now()
+	if(!default_acquire_node)
+		return blackboard[BB_TARGET]
+	default_acquire_node.perform(1, src)
+	return blackboard[BB_TARGET]
 
 /// Returns TRUE if we have a blackboard key and it is not qdeleting.
 /datum/ai_controller/proc/blackboard_key_exists(key)

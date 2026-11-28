@@ -217,7 +217,6 @@
 	if(!aggressive)
 		if(prob(anger_chance) || anger_override)
 			aggressive = WOLF_AGGYES
-			stance = HOSTILE_STANCE_ATTACK
 
 
 /mob/living/simple_animal/hostile/wolf/proc/challenge(mob/challenger)
@@ -226,7 +225,7 @@
 		aggressive = WOLF_AGGYES
 	alpha_challenger = challenger
 	target = challenger
-	stance = HOSTILE_STANCE_ATTACK
+	GiveTarget(challenger)
 	spawn(150) //15 seconds
 		if(challenger.isDead())//If he's dead, calm down
 			aggressive = WOLF_AGGNO
@@ -311,7 +310,7 @@
 	switch(nutrition)
 		if(300 to INFINITY)
 			hunger_status = WOLF_WELLFED
-			if(stance == HOSTILE_STANCE_IDLE)
+			if(is_legacy_idle())
 				aggressive = WOLF_AGGNO
 		if(250 to 300)
 			hunger_status = WOLF_HUNGRY
@@ -402,7 +401,7 @@
 				if(hunger_status == WOLF_WELLFED)
 					return
 
-			stance = HOSTILE_STANCE_ATTACK
+			GiveTarget(target)
 			alpha_stance = WOLF_ALPHAATTACK
 			alpha_target = target
 			add_attacklogs(pack_alpha, target, "set [src] (wolf) on", admin_warn = TRUE)

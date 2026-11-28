@@ -3,7 +3,6 @@
 	stop_automated_movement_when_pulled = 0
 	environment_smash_flags = SMASH_LIGHT_STRUCTURES | SMASH_CONTAINERS	//defines are in simple_animal_defines.dm
 
-	var/stance = HOSTILE_STANCE_IDLE	//Used to determine behavior
 	var/atom/target // /vg/ edit:  Removed type specification so spiders can target doors.
 	var/attack_same = 0 //Set us to 1 to allow us to attack our own faction, or 2, to only ever attack our own faction
 	var/ranged = 0
@@ -71,20 +70,14 @@
 	pending_ai_target = null
 	return controller
 
-/// TRUE when the legacy AI would consider this pawn idle: either no controller
-/// and the legacy stance is idle, or a controller without a blackboard target.
-/// Legacy idle flavor code (nest dragging, foraging, burrowing) uses this so it
-/// still runs while the tree has nothing to fight.
+/// TRUE when the legacy AI would consider this pawn idle: the tree has no target.
+/// Legacy idle flavor code (nest dragging, foraging, burrowing) uses this.
 /mob/living/simple_animal/hostile/proc/is_legacy_idle()
-	if(ai_controller)
-		return !ai_has_target()
-	return stance == HOSTILE_STANCE_IDLE
+	return !ai_has_target()
 
 /// TRUE when the legacy AI would consider this pawn engaged in combat.
 /mob/living/simple_animal/hostile/proc/is_legacy_engaged()
-	if(ai_controller)
-		return !!ai_has_target()
-	return stance == HOSTILE_STANCE_ATTACK || stance == HOSTILE_STANCE_ATTACKING
+	return !!ai_has_target()
 
 /mob/living/simple_animal/hostile/Destroy()
 	QDEL_LIST_NULL(target_rules)
@@ -186,26 +179,12 @@
 	return L
 
 /mob/living/simple_animal/hostile/proc/FindTarget()//Step 2, filter down possible targets to things we actually care about
-	// The behavior tree owns acquisition on migrated mobs; direct callers (legacy
-	// subtype Life() code) must not resurrect the old pipeline.
+	// The tree owns target acquisition. Gameplay code (cult spells, aggro
+	// propagation) still calls this to grab a target immediately, so ask the
+	// controller's acquisition node instead of running a second scan.
 	if(ai_controller)
-		return null
-	var/list/Targets = list()
-	var/Target
-	for(var/atom/A in ListTargets())
-		if (!isValidTarget(A))
-			continue
-		if(Found(A))//Just in case people want to override targetting
-			var/list/FoundTarget = list()
-			FoundTarget += A
-			Targets = FoundTarget
-			break
-		if(CanAttack(A))//Can we attack it?
-			Targets += A
-			continue
-	Target = PickTarget(Targets)
-	if(Target)
-		return Target //We now have a target
+		return ai_controller.find_target_now()
+	return null
 
 /mob/living/simple_animal/hostile/proc/Found(var/atom/A)//This is here as a potential override to pick a specific target if available
 	return
@@ -307,70 +286,16 @@
 			ai_controller.cancel_current_plan()
 		return
 	pending_ai_target = new_target
-	target = new_target
-	if(target != null)
-		Aggro()
-		stance = HOSTILE_STANCE_ATTACK
 	return
 
 /mob/living/simple_animal/hostile/proc/ranged_mode() //Allows different ranged modes to be used, and potentially for a mob to ignore normal ranged behavior in pursuit of a target
 	return ranged
 
 /mob/living/simple_animal/hostile/proc/MoveToTarget()//Step 5, handle movement between us and our target
-	// The tree drives movement on migrated mobs.
-	if(ai_controller)
-		return
-	stop_automated_movement = 1
-	if(!target || !CanAttack(target))
-		LoseTarget()
-		return
-
-	if(loc == lastloc && !target.Adjacent(src))
-		if(environment_smash_flags & OPEN_DOOR_SMART)
-			var/turf/T = get_step(src,target)
-			for(var/obj/machinery/door/airlock/AL in T)
-				AL.attack_animal(src)
-				delayNextAttack(1 SECONDS)
-		else
-			hostile_interest--
-			if(hostile_interest <= 0)
-				LoseTarget()
-				return
-	else
-		hostile_interest = initial(hostile_interest)
-
-	lastloc = loc
-
-	if(isturf(loc))
-		if(target in ListTargets())
-			var/target_distance = get_dist(src,target)
-			if(ranged_mode())//We ranged? Shoot at em if our ranged mode allows for it
-				if(target_distance >= 2 && ranged_cooldown <= 0)//But make sure they're a tile away at least, and our range attack is off cooldown
-					OpenFire(target)
-			if(target.Adjacent(src))	//If they're next to us, attack
-				AttackingTarget()
-			if(canmove && space_check())
-				if(retreat_distance != null && target_distance <= retreat_distance) //If we have a retreat distance, check if we need to run from our target
-					before_retreat()
-					stop_chase()
-					walk_away(src,target,retreat_distance,move_to_delay)
-				else
-					Goto(target,move_to_delay,minimum_distance)//Otherwise, get to our minimum distance so we chase them
-			return
-
-	if(target.loc != null && get_dist(src, target.loc) <= vision_range)//We can't see our target, but he's in our vision range still
-		if(FindHidden(target) && (environment_smash_flags & SMASH_LIGHT_STRUCTURES))//Check if he tried to hide in something to lose us
-			var/atom/A = target.loc
-			if(canmove && space_check())
-				Goto(A,move_to_delay,minimum_distance)
-			if(A.Adjacent(src))
-				UnarmedAttack(A, Adjacent(A))
-			return
-		else
-			LostTarget()
-			return
-
-	LostTarget()
+	// The tree owns movement, and the next planning tick is at most a second
+	// away. Gameplay callers use this to nudge a newly aggroed minion, which
+	// GiveTarget() already did by seeding the blackboard.
+	return
 
 /mob/living/simple_animal/hostile/adjustBruteLoss(var/damage)
 	..(damage)
@@ -385,32 +310,19 @@
 			ai_controller.clear_blackboard_key(BB_TARGET)
 	if(ai_controller)//The tree acquires the next target itself on the next poll
 		Aggro()
-		return
-	if(stance == HOSTILE_STANCE_IDLE)//If we took damage while idle, immediately attempt to find the source of it so we find a living target
-		Aggro()
-		var/new_target = FindTarget()
-		GiveTarget(new_target)
-	if(stance == HOSTILE_STANCE_ATTACK)//No more pulling a mob forever and having a second player attack it, it can switch targets now if it finds a more suitable one
-		if(target != null && prob(25))
-			var/new_target = FindTarget()
-			GiveTarget(new_target)
 
 /mob/living/simple_animal/hostile/proc/AttackTarget()
-
-
-	// The tree drives attacks on migrated mobs.
-	if(ai_controller)
+	// The tree drives attacks, but gameplay callers (admin verbs, item effects)
+	// still want an immediate hit when the target is adjacent.
+	if(!ai_controller)
 		return 0
-	stop_automated_movement = 1
-	if(!target || !CanAttack(target))
-		LoseTarget()
+	var/atom/current_target = ai_controller.blackboard[BB_TARGET]
+	if(!current_target || QDELETED(current_target) || get_dist(src, current_target) > 1)
 		return 0
-	if(!(target in ListTargets()))
-		LostTarget()
-		return 0
-	if(isturf(loc) && target.Adjacent(src))
-		AttackingTarget()
-		return 1
+	target = current_target
+	AttackingTarget()
+	target = null
+	return 1
 
 /mob/living/simple_animal/hostile/proc/AttackingTarget()
 	if(can_ventcrawl && istype(target,/obj/machinery/atmospherics/unary/vent_pump))
@@ -427,19 +339,26 @@
 	search_objects = initial(search_objects)
 
 /mob/living/simple_animal/hostile/proc/LoseTarget()
-	stance = HOSTILE_STANCE_IDLE
-	target = null
 	walk(src, 0)
 	stop_chase()
 	LoseAggro()
 	if(ai_controller)
+		var/atom/old_target = ai_controller.blackboard[BB_TARGET]
 		ai_controller.clear_blackboard_key(BB_TARGET)
+		ai_controller.cancel_current_plan()
+		if(old_target)
+			ai_target_lost(old_target)
 
 /mob/living/simple_animal/hostile/proc/LostTarget()
-	stance = HOSTILE_STANCE_IDLE
 	walk(src, 0)
 	stop_chase()
 	LoseAggro()
+	if(ai_controller)
+		var/atom/old_target = ai_controller.blackboard[BB_TARGET]
+		ai_controller.clear_blackboard_key(BB_TARGET)
+		ai_controller.cancel_current_plan()
+		if(old_target)
+			ai_target_lost(old_target)
 
 //////////////END HOSTILE MOB TARGETTING AND AGGRESSION////////////
 

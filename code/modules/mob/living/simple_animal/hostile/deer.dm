@@ -84,9 +84,7 @@
 			return 1
 
 /mob/living/simple_animal/hostile/deer/proc/get_spooked(var/mob/living/T)
-	// The tree does not drive stance; only set it for mobs still on the legacy AI.
-	if(!ai_controller)
-		stance = HOSTILE_STANCE_ATTACK
+	// `target` is only used for the message below; the tree keeps its own copy.
 	target = T
 	if(ai_controller)
 		ai_controller.blackboard[BB_SPOOKED] = TRUE
