@@ -87,9 +87,11 @@
 	// Pathfinding can be unavailable while the pathfinder subsystem is still
 	// starting; fall back to one greedy step instead of runtiming.
 	var/list/path
-	if(SSpathfinder && SSpathfinder.mobs)
-		// get_path_to() can briefly wait for a pathfinder slot; callers should not
-		// treat this as an instantaneous, sleep-free operation.
+	var/datum/flowcache/slots = SSpathfinder ? SSpathfinder.mobs : null
+	// get_path_to() stoplag()s until a pathfinder slot frees up, and a planning
+	// tick must never sleep. If the cache is full, take the greedy fallback below
+	// and try the real path on a later tick.
+	if(slots && slots.run < slots.lcount)
 		path = get_path_to(
 			pawn,
 			target,

@@ -169,6 +169,32 @@
 	qdel(controller)
 	qdel(B)
 
+/datum/unit_test/behavior_tree_pathfinder_budget/start()
+	var/list/pair = unit_test_bt_floor_pair()
+	if(!pair)
+		return fail("no open floor pair on z1")
+	var/mob/living/simple_animal/hostile/bear/B = new(pair[1])
+	var/datum/ai_controller/controller = new(B)
+	var/datum/ai_movement/basic/movement = controller.ai_movement
+	if(!SSpathfinder || !SSpathfinder.mobs || !istype(movement))
+		qdel(controller)
+		qdel(B)
+		return fail("the pathfinder cache or movement adapter is missing")
+
+	// Pretend every pathfinder slot is taken. get_path_to() would stoplag() until
+	// one frees up; the adapter must take the single greedy step instead.
+	var/old_run = SSpathfinder.mobs.run
+	SSpathfinder.mobs.run = SSpathfinder.mobs.lcount
+	var/started = movement.start_moving_towards(controller, pair[2])
+	SSpathfinder.mobs.run = old_run
+	if(!started)
+		fail("the adapter did not start moving on a busy pathfinder")
+	var/list/path = movement.paths[controller]
+	if(!islist(path) || length(path) != 1)
+		fail("the adapter did not fall back to a single greedy step on a busy pathfinder")
+	qdel(controller)
+	qdel(B)
+
 /datum/unit_test/behavior_tree_food_target_reachability/start()
 	var/list/pair = unit_test_bt_floor_pair()
 	if(!pair)

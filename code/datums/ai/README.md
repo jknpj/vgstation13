@@ -396,7 +396,16 @@ deciding *and* maintaining state. Keep these rules when touching a migrated mob:
 - **The z gate is a deliberate optimization.** Only z levels with a client are
   ticked; controllers on unobserved z levels are skipped because nobody can see
   them act. The lobby mob reports z = 0, so no AI runs before a round starts
-  (that is why mobs look frozen while you are still in the lobby).
+  (that is why mobs look frozen while you are still in the lobby). On a watched z,
+  pawns floating in the base `/area` (space) are additionally skipped unless a
+  client is within `AI_NEARBY_CLIENT_RANGE`; station and ruin areas always tick.
+- **The plan tick never sleeps.** `get_path_to()` `stoplag()`s until a pathfinder
+  slot frees up, so the movement adapter checks `SSpathfinder.mobs.run` and takes
+  the greedy step while the cache is full, retrying the real path on a later
+  tick. Async actions (`do_after`) stay in the async leaf path.
+- **Telemetry is part of the subsystem.** The stat entry reports the pass cost,
+  the rolling average and the worst controller of the last pass, so a regression
+  is visible in the MC tab instead of only in a benchmark.
 
 ## Legacy AI exceptions
 

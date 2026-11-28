@@ -13,6 +13,9 @@ var/datum/subsystem/ai_controllers/low/SSai_controllers_low
 /// subsystems adopt them by status when they start.
 var/list/ai_controllers_pending = list()
 
+/// How close a client must be for a pawn floating in space to keep planning.
+#define AI_NEARBY_CLIENT_RANGE 12
+
 /datum/subsystem/ai_controllers
 	name = "AI Controllers"
 	wait = SS_WAIT_BOTS
@@ -24,6 +27,14 @@ var/list/ai_controllers_pending = list()
 	/// Controllers grouped by z level. Keys are strings because a map index of
 	/// 0 is out of bounds for DM lists (pawnless controllers land in "0").
 	var/list/ai_controllers_by_z = list()
+	/// CPU cost (ms) of the last completed pass.
+	var/pass_cost = 0
+	/// Rolling average of the pass cost (ms).
+	var/average_pass_cost = 0
+	/// Most expensive controller of the last pass, as "name Xms".
+	var/worst_controller = null
+	/// CPU cost (ms) of the most expensive controller of the last pass.
+	var/worst_cost = 0
 
 /datum/subsystem/ai_controllers/New()
 	NEW_SS_GLOBAL(SSai_controllers)
@@ -39,7 +50,29 @@ var/list/ai_controllers_pending = list()
 	var/total = 0
 	for(var/key in ai_controllers_by_z)
 		total += length(ai_controllers_by_z[key])
-	..("AI:[total]")
+	msg = "AI:[total]|Cost:[round(pass_cost, 0.1)]ms|Avg:[round(average_pass_cost, 0.1)]ms"
+	if(worst_controller)
+		msg += "|Worst:[worst_controller]"
+	..(msg)
+
+/// Pawns floating in space only need to think while a client can see them.
+/// Station and away-mission areas always tick, and the z gate in fire() already
+/// skips bare z levels, so this only trims the empty parts of a watched z.
+/datum/subsystem/ai_controllers/proc/is_controller_watched(datum/ai_controller/controller)
+	var/mob/living/pawn = controller.pawn
+	if(!pawn || QDELETED(pawn))
+		return TRUE
+	var/turf/pawn_turf = get_turf(pawn)
+	if(!pawn_turf)
+		return FALSE
+	// The base /area is space; every station/ruin area is a subtype.
+	if(get_area(pawn_turf).type != /area)
+		return TRUE
+	for(var/client/C in clients)
+		var/mob/client_mob = C.mob
+		if(client_mob && client_mob.z == pawn.z && get_dist(client_mob, pawn) <= AI_NEARBY_CLIENT_RANGE)
+			return TRUE
+	return FALSE
 
 /// Adds a controller to the bucket for its pawn's z level, removing it from any
 /// previous bucket first.
@@ -114,6 +147,9 @@ var/list/ai_controllers_pending = list()
 	if(!resumed)
 		sync_z_buckets()
 		currentrun = list()
+		pass_cost = 0
+		worst_controller = null
+		worst_cost = 0
 		var/list/active = get_active_z_levels()
 		if(!islist(active))
 			active = list()
@@ -123,6 +159,8 @@ var/list/ai_controllers_pending = list()
 				continue
 			currentrun += ai_controllers_by_z[key]
 	tick_ai_controllers(currentrun, wait / 10)
+	if(!length(currentrun))
+		average_pass_cost = MC_AVERAGE(average_pass_cost, pass_cost)
 
 /// Shared tick loop; mutates currentrun so a paused fire can resume in place.
 /datum/subsystem/ai_controllers/proc/tick_ai_controllers(list/currentrun, seconds_per_tick)
@@ -132,6 +170,8 @@ var/list/ai_controllers_pending = list()
 
 		if(!controller || controller.gcDestroyed || controller.ai_status == AI_STATUS_OFF)
 			continue
+		if(!is_controller_watched(controller))
+			continue
 
 		// Real time since this controller last ran: a pass can span several ticks
 		// under load, and movement/time accumulators must stay time-correct.
@@ -140,8 +180,14 @@ var/list/ai_controllers_pending = list()
 			controller_seconds = max(0.1, (world.time - controller.last_bt_tick) / 10)
 		controller.last_bt_tick = world.time
 
+		var/tick_usage_before = world.tick_usage
 		controller.SelectBehaviors(controller_seconds)
-
+		var/controller_cost = TICK_DELTA_TO_MS(world.tick_usage - tick_usage_before)
+		if(controller_cost > 0)
+			pass_cost += controller_cost
+			if(controller_cost > worst_cost)
+				worst_cost = controller_cost
+				worst_controller = "[controller.pawn || controller] [round(controller_cost, 0.01)]ms"
 		if(MC_TICK_CHECK)
 			return
 
