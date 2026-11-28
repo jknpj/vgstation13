@@ -302,7 +302,6 @@
 	retreat_distance = 3
 	minimum_distance = 3
 	pass_flags = PASSTABLE
-	hostile_interest = 15 //Very persistent
 	var/open_fire_type = /mob/living/simple_animal/hostile/asteroid/hivelordbrood
 	var/list/mob/living/simple_animal/hostile/broods = list()
 	var/brood_limit = 0
@@ -379,7 +378,6 @@
 	status_flags = UNPACIFIABLE
 	move_to_delay = 30
 	harm_intent_damage = 10
-	hostile_interest = 5 //Less persistent
 	open_fire_type = /mob/living/simple_animal/hostile/asteroid/hivelord
 	brood_limit = 5
 	treadmill_speed = 6

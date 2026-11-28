@@ -40,6 +40,8 @@
 	/// a step. The planning tick is 1 s, so a mob whose legacy walk moved every
 	/// 0.2 s needs several steps per tick to keep its speed.
 	var/list/step_credit = list()
+	/// controller -> target of an in-flight async path request.
+	var/list/pending_paths = list()
 	/// controller -> target the cached path was built for.
 	var/list/path_targets = list()
 	/// controller -> steps consumed from the cached path.
@@ -49,6 +51,7 @@
 	path_targets = null
 	path_steps = null
 	step_credit = null
+	pending_paths = null
 	return ..()
 
 /// Delay between steps in deciseconds. move_to_delay is in world ticks, exactly
@@ -67,7 +70,41 @@
 	path_targets -= controller
 	path_steps -= controller
 	step_credit -= controller
+	pending_paths -= controller
 	return ..()
+
+/// Queues a real path on the pathfinder subsystem while it is saturated. The
+/// greedy fallback keeps the pawn moving; on_async_path() swaps in the real path
+/// if the pawn is still close enough to its start.
+/datum/ai_movement/basic/proc/queue_async_path(datum/ai_controller/controller, atom/target, max_distance)
+	if(pending_paths[controller] == target)
+		return
+	pending_paths[controller] = target
+	var/datum/path_request/request = new
+	request.caller = controller.pawn
+	request.target = target
+	request.max_distance = max_distance
+	request.diagonally = FALSE
+	request.cardinalize = TRUE
+	request.on_finish = new /callback(src, nameof(src::on_async_path()), controller, target)
+	SSpathfinder.queue_path(request)
+
+/// Callback for a finished async path request: adopt the path when the pawn is
+/// still chasing the same target and can reach its first step.
+/datum/ai_movement/basic/proc/on_async_path(datum/ai_controller/controller, atom/target, list/path)
+	pending_paths -= controller
+	if(!controller || QDELETED(controller) || !controller.pawn)
+		return
+	if(!path || !length(path))
+		return
+	if(path_targets[controller] != target)
+		return
+	var/turf/first_step = path[1]
+	if(!first_step || get_dist(controller.pawn, first_step) > 1)
+		return // the greedy fallback moved us past the request's start
+	paths[controller] = path
+	path_steps[controller] = 0
+	path_targets[controller] = target
 
 /datum/ai_movement/basic/needs_repath(datum/ai_controller/controller, atom/target)
 	if(!has_path(controller))
@@ -89,8 +126,8 @@
 	var/list/path
 	var/datum/flowcache/slots = SSpathfinder ? SSpathfinder.mobs : null
 	// get_path_to() stoplag()s until a pathfinder slot frees up, and a planning
-	// tick must never sleep. If the cache is full, take the greedy fallback below
-	// and try the real path on a later tick.
+	// tick must never sleep. If the cache is full, queue the real path on the
+	// pathfinder subsystem and take the greedy fallback below meanwhile.
 	if(slots && slots.run < slots.lcount)
 		path = get_path_to(
 			pawn,
@@ -102,6 +139,8 @@
 			diagonally = FALSE,
 			cardinalize = TRUE,
 		)
+	else if(SSpathfinder)
+		queue_async_path(controller, target, max_distance)
 
 	if(!path || !length(path))
 		var/turf/fallback_step = get_step_towards(pawn, target)

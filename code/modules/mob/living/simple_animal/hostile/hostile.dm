@@ -32,8 +32,6 @@
 	var/attack_faction = null //Put a faction string here to have a mob only ever attack a specific faction
 	var/friendly_fire = 0 //If set to 1, they won't hesitate to shoot their target even if a friendly is in the way.
 	var/armor_modifier = 1 //The higher this is, the more effect armor has on melee attacks
-	var/hostile_interest = 2 //How long will we wait in the same spot trying to chase something before giving up?
-	var/atom/lastloc //Where we were last time we were moving toward a target.
 
 	var/list/target_rules = list()
 
@@ -461,7 +459,6 @@
 		EscapeConfinement()
 		var/obj/blocker = path_barrier()
 		if(blocker)
-			hostile_interest = initial(hostile_interest)
 			UnarmedAttack(blocker, TRUE)
 			return
 		var/list/smash_dirs = list(0)
@@ -499,7 +496,6 @@
 						var/obj/machinery/door/firedoor/FIR = A
 						if(!FIR.density || FIR.blocked || FIR.operating)
 							continue
-					hostile_interest = initial(hostile_interest) // don't lose interest while smashing shit!
 					UnarmedAttack(A, Adjacent(A))
 	return
 

@@ -195,6 +195,38 @@
 	qdel(controller)
 	qdel(B)
 
+/datum/unit_test/behavior_tree_async_path
+	var/received = FALSE
+	var/list/received_path = null
+
+/datum/unit_test/behavior_tree_async_path/proc/on_path(list/path)
+	received = TRUE
+	received_path = path
+
+/datum/unit_test/behavior_tree_async_path/start()
+	var/list/pair = unit_test_bt_floor_pair()
+	if(!pair)
+		return fail("no open floor pair on z1")
+	if(!SSpathfinder)
+		return fail("the pathfinder subsystem is missing")
+	var/mob/living/simple_animal/hostile/bear/B = new(pair[1])
+	var/datum/path_request/request = new
+	request.caller = B
+	request.target = pair[2]
+	request.skip_first = FALSE
+	request.on_finish = new /callback(src, nameof(src::on_path()))
+	SSpathfinder.queue_path(request)
+	if(!(request in SSpathfinder.requests))
+		qdel(B)
+		return fail("the async request was not queued")
+	SSpathfinder.requests -= request
+	SSpathfinder.process_request(request)
+	if(!received)
+		fail("the async path callback did not run")
+	else if(!islist(received_path) || !length(received_path))
+		fail("the async request returned no path")
+	qdel(B)
+
 /datum/unit_test/behavior_tree_food_target_reachability/start()
 	var/list/pair = unit_test_bt_floor_pair()
 	if(!pair)

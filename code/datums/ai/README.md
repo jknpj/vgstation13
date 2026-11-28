@@ -400,9 +400,11 @@ deciding *and* maintaining state. Keep these rules when touching a migrated mob:
   pawns floating in the base `/area` (space) are additionally skipped unless a
   client is within `AI_NEARBY_CLIENT_RANGE`; station and ruin areas always tick.
 - **The plan tick never sleeps.** `get_path_to()` `stoplag()`s until a pathfinder
-  slot frees up, so the movement adapter checks `SSpathfinder.mobs.run` and takes
-  the greedy step while the cache is full, retrying the real path on a later
-  tick. Async actions (`do_after`) stay in the async leaf path.
+  slot frees up, so the movement adapter checks `SSpathfinder.mobs.run`: when the
+  cache is full it queues the path on the pathfinder subsystem (`/datum/path_request`,
+  drained by its own fire only while a slot is free, with a callback) and takes
+  the greedy step until the queued path arrives. Async actions (`do_after`) stay
+  in the async leaf path.
 - **Telemetry is part of the subsystem.** The stat entry reports the pass cost,
   the rolling average and the worst controller of the last pass, so a regression
   is visible in the MC tab instead of only in a benchmark.
