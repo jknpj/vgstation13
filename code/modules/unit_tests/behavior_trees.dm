@@ -118,6 +118,36 @@
 	qdel(S)
 	qdel(Q)
 
+/datum/unit_test/behavior_tree_attack_cadence/start()
+	var/list/pair = unit_test_bt_floor_pair()
+	if(!pair)
+		return fail("no open floor pair on z1")
+	var/mob/living/simple_animal/hostile/giant_spider/nurse/queen_spider/Q = new(pair[1])
+	var/mob/living/simple_animal/mouse/target = new(pair[2])
+	// Keep the victim alive: a dead target makes the nurse cocoon it (5 s do_after)
+	// and turns the cadence check into a slow test.
+	target.maxHealth = 100000
+	target.health = 100000
+	var/datum/ai_controller/controller = new(Q)
+	var/datum/bt_node/ai_behavior/attack_target/node = new
+	controller.blackboard[BB_TARGET] = target
+
+	// Legacy hostile Life() attacked once per 2 s tick; the first attack lands and
+	// starts the cooldown, the next tick must not attack again.
+	node.do_attack(controller, target)
+	if(node.next_attack_time <= world.time)
+		fail("the first attack did not start the cooldown")
+	var/health_after_first = target.health
+	node.do_attack(controller, target)
+	if(target.health != health_after_first)
+		fail("the leaf attacked twice inside the legacy 2 s cadence")
+	if(node.next_attack_time <= world.time)
+		fail("the attack cooldown was not refreshed")
+	qdel(node)
+	qdel(controller)
+	qdel(target)
+	qdel(Q)
+
 /datum/unit_test/behavior_tree_food_target_reachability/start()
 	var/list/pair = unit_test_bt_floor_pair()
 	if(!pair)

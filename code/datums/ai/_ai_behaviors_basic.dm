@@ -378,6 +378,11 @@
 /// is not adjacent so a selector can fall through to a movement branch.
 /datum/bt_node/ai_behavior/attack_target
 	var/target_key = BB_TARGET
+	/// Legacy hostile Life() attacked once per 2 s tick; the controller ticks at
+	/// 1 s, so the leaf keeps the legacy rate instead of doubling melee DPS.
+	var/attack_cooldown = 2 SECONDS
+	/// world.time of the next allowed attack.
+	var/next_attack_time = 0
 
 /datum/bt_node/ai_behavior/attack_target/setup(datum/ai_controller/controller)
 	var/atom/target = controller.blackboard[target_key]
@@ -394,6 +399,9 @@
 /// Runs the attack (or the mob's legacy AttackingTarget override) once.
 /datum/bt_node/ai_behavior/attack_target/proc/do_attack(datum/ai_controller/controller, atom/target)
 	var/mob/living/pawn = controller.pawn
+	if(world.time < next_attack_time)
+		return AI_BEHAVIOR_SUCCEEDED
+	next_attack_time = world.time + attack_cooldown
 	// Bridge to the legacy combat hook so mob overrides keep working: the queen
 	// roach lays eggs, the flying skull plays its bite animation, and so on.
 	// The legacy hook reads src.target, so point it at the blackboard target for
