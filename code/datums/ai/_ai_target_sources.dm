@@ -30,14 +30,18 @@
 	for(var/key in config)
 		vars[key] = config[key]
 
-/// Returns TRUE while an existing target is still inside the pawn's view. Legacy
-/// `AttackTarget()` dropped anything missing from `ListTargets()`; a target put
-/// inside a cocoon, locker or mecha must be dropped too. Sources that track
-/// contained targets (a snack in someone's hand) override this.
+/// Returns TRUE while an existing target is still in range and on a turf.
+/// The legacy `AttackTarget()` dropped anything missing from `ListTargets()`;
+/// the expensive part of that was rebuilding a view list every tick, so this is
+/// the cheap version: contained targets (a cocoon, a locker) are unreachable and
+/// far-away targets are dropped. Sources that track contained targets (a snack
+/// in someone's hand) override this.
 /datum/target_source/proc/is_reachable_target(datum/ai_controller/controller, mob/living/pawn, atom/existing, search_range)
 	if(!existing || !pawn || QDELETED(existing) || QDELETED(pawn))
 		return FALSE
-	return existing in oview(search_range, pawn)
+	if(!isturf(existing.loc))
+		return FALSE
+	return get_dist(pawn, existing) <= search_range
 
 /// Returns TRUE while this source still considers the stored target valid.
 /datum/target_source/proc/is_valid_target(datum/ai_controller/controller, mob/living/pawn, atom/existing)
