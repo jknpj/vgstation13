@@ -231,6 +231,92 @@
 
 /// Ranged mobs keep the legacy chase: a goliath with no retreat distance has to
 /// close in while its tentacle attack cools down, not hold position at range.
+/// A cached path stays valid while the target is still on the turf the path was
+/// built for. Re-pathing on a step count made crowds recompute A* every second
+/// against a target that had not moved.
+/// An open corridor uses the straight-line route instead of A*: the path is
+/// walkable, cardinal and ends adjacent to a melee prey. An obstacle in the line
+/// removes the direct option so the caller falls back to get_path_to().
+/datum/unit_test/behavior_tree_direct_path/start()
+	var/turf/base = null
+	var/turf/prey_turf = null
+	for(var/turf/T in block(locate(1, 1, 1), locate(world.maxx, world.maxy, 1)))
+		if(!istype(T, /turf/simulated/floor) || T.density)
+			continue
+		var/turf/candidate = T
+		var/clear = TRUE
+		for(var/i in 1 to 4)
+			candidate = get_step(candidate, EAST)
+			if(!candidate || !istype(candidate, /turf/simulated/floor) || is_blocked_turf(candidate))
+				clear = FALSE
+				break
+		if(clear)
+			base = T
+			prey_turf = candidate
+			break
+	if(!base)
+		return fail("no clear four-tile corridor on z1")
+
+	var/mob/living/simple_animal/hostile/bear/B = new(base)
+	var/mob/living/carbon/monkey/prey = new(prey_turf)
+	var/datum/ai_controller/controller = new(B)
+	var/datum/ai_movement/basic/movement = controller.ai_movement
+	if(!istype(movement))
+		qdel(controller)
+		qdel(prey)
+		qdel(B)
+		return fail("the controller has no basic movement adapter")
+
+	var/failure = null
+	var/list/path = movement.try_direct_path(controller, prey)
+	if(!islist(path))
+		failure = "the open corridor did not produce a direct path"
+	else if(length(path) != 3)
+		failure = "the direct path covered [length(path)] steps instead of 3"
+	else
+		var/turf/middle = get_step(base, EAST)
+		var/obj/structure/table/blocker = new(middle)
+		if(movement.try_direct_path(controller, prey))
+			failure = "a blocked corridor still produced a direct path"
+		qdel(blocker)
+
+	qdel(controller)
+	qdel(prey)
+	qdel(B)
+	if(failure)
+		fail(failure)
+
+/datum/unit_test/behavior_tree_path_reused_while_goal_unchanged/start()
+	var/list/pair = unit_test_bt_floor_pair()
+	if(!pair)
+		return fail("no open floor pair on z1")
+	var/mob/living/simple_animal/hostile/bear/B = new(pair[1])
+	var/mob/living/carbon/monkey/prey = new(pair[2])
+	var/datum/ai_controller/controller = new(B)
+	var/datum/ai_movement/basic/movement = controller.ai_movement
+	if(!istype(movement))
+		qdel(controller)
+		qdel(prey)
+		qdel(B)
+		return fail("the controller has no basic movement adapter")
+
+	var/failure = null
+	if(!movement.start_moving_towards(controller, prey))
+		failure = "the adapter could not start moving"
+	else if(movement.needs_repath(controller, prey))
+		failure = "the cached path was invalidated while the target stood still"
+	else
+		prey.forceMove(pair[1])
+		if(!movement.needs_repath(controller, prey))
+			failure = "moving the target out of the path goal did not invalidate the path"
+
+	movement.stop_moving_towards(controller)
+	qdel(controller)
+	qdel(prey)
+	qdel(B)
+	if(failure)
+		fail(failure)
+
 /datum/unit_test/behavior_tree_ranged_chases_to_min_distance/start()
 	var/turf/base = null
 	var/turf/prey_turf = null

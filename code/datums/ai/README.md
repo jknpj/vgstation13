@@ -42,11 +42,12 @@ are out of scope.
   sentience (`/event/living_login`, `/event/logout`), subsystem routing, movement
   adapter, pawn death handling and the `ai_target_acquired()` /
   `ai_target_lost()` mob hooks.
-- `_ai_movement.dm`: basic `get_path_to()` walker with a greedy step fallback
-  while the pathfinder subsystem is not ready or has no route. Caches the path
-  per controller/target and repaths after `repath_after` steps or a target change.
-  The path is stepped by `SSai_movement` (a ticker subsystem), never by the
-  planning tick.
+- `_ai_movement.dm`: basic walker for short unobstructed chases (a cardinal
+  straight-line route) with a `get_path_to()` fallback that caches the path per
+  controller/target, plus a greedy step while the pathfinder is busy or has no
+  route. Repaths only when the target changes or leaves the turf the cached path
+  ends on. The path is stepped by `SSai_movement` (a ticker subsystem), never by
+  the planning tick.
 - `_ai_target_sources.dm`: `target_source` base plus `enemies` (closest pick,
   legacy distance rule, `isValidTarget()`/`CanAttack()` filters, plus wanted
   objects while the pawn still searches for them), `enemies/wounded` (weakest
@@ -273,12 +274,14 @@ childless and it fails every tick.
   keeps controllers in per-z buckets and skips z levels without a client: an
   unobserved z level does not need to simulate decisions. Buckets self-heal when
   a pawn changes z (`sync_z_buckets()`). The per-controller rate is unchanged.
-- **Simplified movement.** `ai_movement/basic` uses `get_path_to()` with a
-  per-controller path cache. If `SSpathfinder.mobs` is not initialized or
-  returns no route, it falls back to one greedy step instead of runtiming. That
-  fallback has no obstacle avoidance: a blocked step is reported through
-  `take_blocked()`, the movement leaf fails and the tree retries or smashes on
-  the next planning tick, so a pawn can stall on a single blocker.
+- **Simplified movement.** `ai_movement/basic` first tries a cardinal straight
+  line (`try_direct_path()`, up to `AI_DIRECT_PATH_RANGE`) and only calls
+  `get_path_to()` when something obstructs it; both share the per-controller path
+  cache. If `SSpathfinder.mobs` is not initialized or returns no route, it falls
+  back to one greedy step instead of runtiming. That fallback has no obstacle
+  avoidance: a blocked step is reported through `take_blocked()`, the movement
+  leaf fails and the tree retries or smashes on the next planning tick, so a pawn
+  can stall on a single blocker.
 - **Starter hostile behavior only.** The shared trees have acquire/move/attack,
   plus opt-in flee (`bt_fleeing_hostile_tree`), ranged combat with
   retreat/hold (`bt_ranged_hostile_tree`) and `speak_line`. Chatting leaves
