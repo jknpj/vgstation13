@@ -41,9 +41,6 @@
 	var/can_ventcrawl = FALSE // If the mob can ventcrawl
 	var/avoids_poisonous = FALSE
 	var/mob/living/simple_animal/hostile/asteroid/hivelord/hivelord = null
-	/// Opt out of the generic behavior-tree install while a subtype keeps its
-	/// own bespoke AI; those mobs keep the legacy stance machine.
-	var/uses_legacy_ai = FALSE
 	/// Target set by GiveTarget() before the lazy controller install; used by
 	/// spawned minions and callers that propagate aggro through GiveTarget().
 	var/atom/pending_ai_target = null
@@ -144,7 +141,7 @@
 	// WIP: every hostile mob is driven by a behavior tree. The controller is
 	// created lazily on the first Life tick so subtype New() has already run and
 	// set up ranged/retreat/search vars; mobs with a custom tree already have one.
-	if(!ai_controller && !stat && !uses_legacy_ai)
+	if(!ai_controller && !stat)
 		use_hostile_tree()
 	. = ..()
 	//Cooldowns
@@ -168,28 +165,11 @@
 				return 0
 		if(is_pacified())
 			return 0
-		// The behavior tree owns target acquisition, movement and attacks.
-		if(!ai_controller)
-			switch(stance)
-				if(HOSTILE_STANCE_IDLE)
-					if(environment_smash_flags & SMASH_LIGHT_STRUCTURES)
-						EscapeConfinement()
-					var/new_target = FindTarget()
-					GiveTarget(new_target)
-					// Chase on the acquiring tick rather than idling a full 2s AI tick.
-					if(stance == HOSTILE_STANCE_ATTACK && !(flags & INVULNERABLE))
-						MoveToTarget()
-						DestroySurroundings()
-
-				if(HOSTILE_STANCE_ATTACK)
-					if(!(flags & INVULNERABLE))
-						MoveToTarget()
-						DestroySurroundings()
-
-				if(HOSTILE_STANCE_ATTACKING)
-					if(!(flags & INVULNERABLE))
-						AttackTarget()
-						DestroySurroundings()
+		// The behavior tree owns target acquisition, movement and attacks. Idle
+		// confinement escape is not a decision and stays here: mobs that break
+		// structures still try to get out of walls while they have no target.
+		if((environment_smash_flags & SMASH_LIGHT_STRUCTURES) && is_legacy_idle())
+			EscapeConfinement()
 
 //////////////HOSTILE MOB TARGETTING AND AGGRESSION////////////
 

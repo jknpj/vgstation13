@@ -18,6 +18,11 @@
 	var/list/polling_observers = null
 	/// Current AI status; only controllers not in AI_STATUS_OFF are ticked.
 	var/ai_status = AI_STATUS_OFF
+	/// Seconds since the previous SelectBehaviors tick. Movement uses it to keep
+	/// the legacy step rate when a planning pass is delayed.
+	var/seconds_per_tick = 1
+	/// world.time of the previous SelectBehaviors tick; 0 right after a status change.
+	var/last_bt_tick = 0
 	/// Movement adapter used by movement behaviors.
 	var/datum/ai_movement/ai_movement = null
 	/// Set by cancel_current_plan() mid-tick so composites abort the current tick loop.
@@ -180,6 +185,7 @@
 	// Leaves call legacy procs whose rare overrides can sleep; the async action
 	// path is where sleeping actions belong.
 	// Safety net for death overrides that skip ..() and never fire /event/death.
+	src.seconds_per_tick = (isnull(seconds_per_tick) || seconds_per_tick <= 0) ? 1 : seconds_per_tick
 	if(pawn && pawn.stat == DEAD)
 		set_ai_status(AI_STATUS_OFF)
 		return

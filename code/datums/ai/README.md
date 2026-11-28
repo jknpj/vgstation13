@@ -388,9 +388,11 @@ deciding *and* maintaining state. Keep these rules when touching a migrated mob:
   the target lives inside the cocoon.
 - **One movement system per mob.** Migrated pawns use `controller.ai_movement`;
   `start_walk_to()` (greedy `walk_to`, no pathfinding) is only for the documented
-  legacy exceptions. A mob that keeps the greedy walk handles "cannot reach it"
-  itself: the parrot skips a target it failed to reach for
-  `PARROT_UNREACHABLE_COOLDOWN`.
+  legacy exceptions. The adapter moves at the legacy rate: `move_to_delay` is in
+  world ticks, so it accumulates real time (`get_step_interval()`) and can take
+  several steps in one 1 s planning tick. A mob that keeps the greedy walk
+  handles "cannot reach it" itself: the parrot skips a target it failed to reach
+  for `PARROT_UNREACHABLE_COOLDOWN`.
 - **The z gate is a deliberate optimization.** Only z levels with a client are
   ticked; controllers on unobserved z levels are skipped because nobody can see
   them act. The lobby mob reports z = 0, so no AI runs before a round starts

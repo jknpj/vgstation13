@@ -133,7 +133,14 @@ var/list/ai_controllers_pending = list()
 		if(!controller || controller.gcDestroyed || controller.ai_status == AI_STATUS_OFF)
 			continue
 
-		controller.SelectBehaviors(seconds_per_tick)
+		// Real time since this controller last ran: a pass can span several ticks
+		// under load, and movement/time accumulators must stay time-correct.
+		var/controller_seconds = seconds_per_tick
+		if(controller.last_bt_tick)
+			controller_seconds = max(0.1, (world.time - controller.last_bt_tick) / 10)
+		controller.last_bt_tick = world.time
+
+		controller.SelectBehaviors(controller_seconds)
 
 		if(MC_TICK_CHECK)
 			return

@@ -148,6 +148,27 @@
 	qdel(target)
 	qdel(Q)
 
+/datum/unit_test/behavior_tree_movement_cadence/start()
+	var/list/pair = unit_test_bt_floor_pair()
+	if(!pair)
+		return fail("no open floor pair on z1")
+	var/mob/living/simple_animal/hostile/bear/B = new(pair[1])
+	B.move_to_delay = 2
+	var/datum/ai_controller/controller = new(B)
+	var/datum/ai_movement/basic/movement = controller.ai_movement
+	if(!istype(movement))
+		qdel(B)
+		return fail("the controller has no basic movement adapter")
+
+	// move_to_delay is in world ticks, exactly like walk_to()/Goto() before the
+	// port, so the adapter interval is move_to_delay * world.tick_lag.
+	var/expected = max(1, 2 * world.tick_lag)
+	var/actual = movement.get_step_interval(controller)
+	if(abs(actual - expected) > 0.001)
+		fail("step interval [actual] does not match the legacy [expected] for move_to_delay 2")
+	qdel(controller)
+	qdel(B)
+
 /datum/unit_test/behavior_tree_food_target_reachability/start()
 	var/list/pair = unit_test_bt_floor_pair()
 	if(!pair)

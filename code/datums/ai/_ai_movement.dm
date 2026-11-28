@@ -34,6 +34,12 @@
 /datum/ai_movement/basic
 	/// Recompute a path when this many steps have been consumed and the target moved.
 	var/repath_after = 8
+	/// Safety cap on steps spent in one planning tick.
+	var/max_steps_per_tick = 20
+	/// controller -> movement time (deciseconds) accumulated but not yet spent on
+	/// a step. The planning tick is 1 s, so a mob whose legacy walk moved every
+	/// 0.2 s needs several steps per tick to keep its speed.
+	var/list/step_credit = list()
 	/// controller -> target the cached path was built for.
 	var/list/path_targets = list()
 	/// controller -> steps consumed from the cached path.
@@ -42,11 +48,25 @@
 /datum/ai_movement/basic/Destroy()
 	path_targets = null
 	path_steps = null
+	step_credit = null
 	return ..()
+
+/// Delay between steps in deciseconds. move_to_delay is in world ticks, exactly
+/// like the Lag walk_to()/Goto() used before the port, so the adapter has to
+/// scale it by world.tick_lag or every migrated mob moves far slower.
+/datum/ai_movement/basic/proc/get_step_interval(datum/ai_controller/controller)
+	var/mob/living/pawn = controller.pawn
+	var/lag = 5
+	if(istype(pawn, /mob/living/simple_animal/hostile))
+		var/mob/living/simple_animal/hostile/hostile_pawn = pawn
+		if(hostile_pawn.move_to_delay > 0)
+			lag = hostile_pawn.move_to_delay
+	return max(1, lag * world.tick_lag)
 
 /datum/ai_movement/basic/stop_moving_towards(datum/ai_controller/controller)
 	path_targets -= controller
 	path_steps -= controller
+	step_credit -= controller
 	return ..()
 
 /datum/ai_movement/basic/needs_repath(datum/ai_controller/controller, atom/target)
@@ -101,13 +121,30 @@
 	var/list/path = paths[controller]
 	if(!pawn || QDELETED(pawn) || !path || !length(path))
 		paths -= controller
+		step_credit -= controller
 		return FALSE
 
-	var/turf/next_step = path[1]
-	path.Cut(1, 2)
-	if(!next_step || !pawn.Move(next_step))
-		paths -= controller
-		return FALSE
+	// Accumulate real time (the planner can be delayed under load) and spend it
+	// on steps at the legacy rate.
+	var/seconds = controller.seconds_per_tick
+	if(!seconds || seconds <= 0)
+		seconds = 1
+	step_credit[controller] += seconds * 10
 
-	path_steps[controller]++
-	return TRUE
+	var/interval = get_step_interval(controller)
+	var/steps = 0
+	var/moved = FALSE
+	while(step_credit[controller] >= interval && steps < max_steps_per_tick)
+		var/turf/next_step = path[1]
+		path.Cut(1, 2)
+		step_credit[controller] -= interval
+		steps++
+		if(!next_step || !pawn.Move(next_step))
+			paths -= controller
+			step_credit -= controller
+			return moved
+		moved = TRUE
+		path_steps[controller]++
+		if(!length(path))
+			break
+	return moved
