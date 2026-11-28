@@ -360,6 +360,42 @@ childless and it fails every tick.
   pawn is dead, covering death overrides that skip `..()` and never fire
   `/event/death`.
 
+## State ownership contract
+
+Every bug in this port so far came from a legacy proc doing two jobs at once:
+deciding *and* maintaining state. Keep these rules when touching a migrated mob:
+
+- **The blackboard is the target.** `target`/`stance`/`search_objects` stay as
+  compatibility fields for `AttackingTarget()` and the non-migrated subtypes;
+  the tree reads and writes `BB_TARGET`.
+- **Target sources answer both questions.** `find_targets()`/`pick_target()`
+  decide whether to start something; `is_reachable_target()`/`is_valid_target()`
+  decide whether the stored target is still valid. Reachability defaults to
+  `oview(search_range)` (the legacy `ListTargets()` gate); sources that track a
+  contained target (a snack in someone's hand) override it.
+- **Keep the legacy cadence.** The controller ticks at 1 s, legacy `Life()` at
+  2 s. A leaf that calls an action which used to run once per state tick needs
+  `time_between_perform`, `AI_BEHAVIOR_DELAY` or an explicit `world.time` gate.
+  Anything with visible output (`visible_message`, `do_after`, icon work) needs
+  one, without exception.
+- **Damage is a transition, not just health.** `adjustBruteLoss()` drops object
+  targets, suspends `search_objects` and aggros tree pawns; `acquire_target()`
+  restores `search_objects` once nothing is left (the legacy `LoseAggro()` side
+  effect). Never put `!ai_controller` around a block that only maintains state.
+- **Async leaves own their target** for the whole action. Legacy procs that
+  sleep (`spin_cocoon`, `lay_eggs`) must be safe to re-enter and guard against
+  double work: `spin_cocoon()` checks the turf, because after the first success
+  the target lives inside the cocoon.
+- **One movement system per mob.** Migrated pawns use `controller.ai_movement`;
+  `start_walk_to()` (greedy `walk_to`, no pathfinding) is only for the documented
+  legacy exceptions. A mob that keeps the greedy walk handles "cannot reach it"
+  itself: the parrot skips a target it failed to reach for
+  `PARROT_UNREACHABLE_COOLDOWN`.
+- **The z gate is a deliberate optimization.** Only z levels with a client are
+  ticked; controllers on unobserved z levels are skipped because nobody can see
+  them act. The lobby mob reports z = 0, so no AI runs before a round starts
+  (that is why mobs look frozen while you are still in the lobby).
+
 ## Legacy AI exceptions
 
 - `capybara`, `hamster`, `bait` and `meat_blob_chunk` live outside the
@@ -387,6 +423,12 @@ childless and it fails every tick.
    vox, dracson, grue_egg) are out of scope.
 
 ## Testing
+
+The repo unit tests (`code/modules/unit_tests/behavior_trees.dm`) pin the state
+invariants above: contained targets are dropped, damage suspends object
+searching and clears the blackboard, object searching is restored once nothing
+is left, `spin_cocoon()` does not nest cocoons, and a held snack stays reachable
+through its holder.
 
 The auxtools scenario lives outside the repository (local harness):
 build a sequence/selector/decorator/subtree, tick it across RUNNING/SUCCESS/

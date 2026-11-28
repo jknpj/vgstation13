@@ -25,6 +25,9 @@
 #define PARROT_RETURN 32	//Flying towards its perch
 #define PARROT_FLEE 64		//Flying away from its attacker
 
+//How long a target the parrot could not reach is skipped by the item search.
+#define PARROT_UNREACHABLE_COOLDOWN 30 SECONDS
+
 
 /mob/living/simple_animal/parrot
 	name = "parrot"
@@ -80,6 +83,10 @@
 	//The thing the parrot is currently interested in. This gets used for items the parrot wants to pick up, mobs it wants to steal from,
 	//mobs it wants to attack or mobs that have attacked it
 	var/atom/movable/parrot_interest = null
+	/// atom -> world.time before which the parrot will not pick it again after
+	/// failing to reach it (the flight has no pathfinding, so a target behind a
+	/// window would be re-acquired and emoted at forever).
+	var/list/parrot_ignored = list()
 
 	//Parrots will generally sit on their perch unless something catches their eye.
 	//These vars store their preffered perch and if they dont have one, what they can use as a perch
@@ -674,6 +681,7 @@
 	if(parrot_lastmove)
 		if(parrot_lastmove == src.loc)
 			if(parrot_stuck_threshold >= ++parrot_stuck) //If it has been stuck for a while, go back to wander.
+				ignore_unreachable_target()
 				parrot_state = PARROT_WANDER
 				parrot_stuck = 0
 				parrot_lastmove = null
@@ -684,8 +692,29 @@
 		parrot_lastmove = src.loc
 	return 0
 
+/// Stops the parrot from picking the current target again for a while. The steal
+/// flight is a greedy walk, so an item it cannot reach would otherwise be
+/// re-acquired and emoted at in a loop.
+/mob/living/simple_animal/parrot/proc/ignore_unreachable_target()
+	if(!parrot_interest)
+		return
+	parrot_ignored[parrot_interest] = world.time + PARROT_UNREACHABLE_COOLDOWN
+	parrot_interest = null
+
+/// TRUE while AM is on the unreachable cooldown; expired entries are dropped.
+/mob/living/simple_animal/parrot/proc/is_ignored(var/atom/movable/AM)
+	var/ignore_until = parrot_ignored[AM]
+	if(!ignore_until)
+		return FALSE
+	if(ignore_until > world.time)
+		return TRUE
+	parrot_ignored -= AM
+	return FALSE
+
 /mob/living/simple_animal/parrot/proc/search_for_item()
 	for(var/atom/movable/AM in view(src))
+		if(is_ignored(AM))
+			continue
 		//Skip items we already stole or are wearing or are too big
 		if(parrot_perch && AM.loc == parrot_perch.loc || AM.loc == src)
 			continue
@@ -713,6 +742,8 @@
 //This proc was made to save on doing two 'in view' loops seperatly
 /mob/living/simple_animal/parrot/proc/search_for_perch_and_item()
 	for(var/atom/movable/AM in view(src))
+		if(is_ignored(AM))
+			continue
 		for(var/perch_path in desired_perches)
 			if(istype(AM, perch_path))
 				return AM
