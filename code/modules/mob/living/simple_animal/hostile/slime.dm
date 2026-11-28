@@ -63,11 +63,6 @@
 		calm()
 
 
-/mob/living/simple_animal/hostile/slime/MoveToTarget()
-	..()
-	if(target && target.Adjacent(src))
-		forceMove(get_turf(target))
-
 /mob/living/simple_animal/hostile/slime/AttackingTarget()
 	forceMove(get_turf(target))
 	..()

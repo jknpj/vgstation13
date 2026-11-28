@@ -321,18 +321,6 @@
 	if(attack_mode)
 		mode_movement()
 
-/mob/living/simple_animal/hostile/hive_alien/defender/LostTarget()
-	if(attack_mode && !FindTarget()) //If we don't immediately find another target, switch to movement mode
-		mode_movement()
-
-	return ..()
-
-/mob/living/simple_animal/hostile/hive_alien/defender/LoseTarget()
-	if(attack_mode && !FindTarget()) //If we don't immediately find another target, switch to movement mode
-		mode_movement()
-
-	return ..()
-
 /mob/living/simple_animal/hostile/hive_alien/defender/Goto()
 	if(attack_mode) //Can't move in attack mode
 		return

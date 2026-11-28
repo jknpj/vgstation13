@@ -305,11 +305,11 @@ var/global/list/crate_mimic_disguises = list(\
 				H.Knockdown(3)
 				H.Stun(3)
 
-/mob/living/simple_animal/hostile/mimic/crate/chest/LoseTarget()
-	if(target in get_locked(/datum/locking_category/mimic))
-		unlock_atom(target)
+/mob/living/simple_animal/hostile/mimic/crate/chest/ai_target_lost(atom/old_target)
+	if(old_target in get_locked(/datum/locking_category/mimic))
+		unlock_atom(old_target)
 
-	var/mob/living/L = target
+	var/mob/living/L = old_target
 	if(istype(L) && Adjacent(L)) //If we're near our ex-target!
 		if(L.stat == DEAD) //The target is dead (which what caused us to lose it in the first place)
 			L.forceMove(src)
@@ -562,10 +562,11 @@ var/global/list/protected_objects = list(
 		M.forceMove(get_turf(src))
 	..(gibbed)
 
-/mob/living/simple_animal/hostile/mimic/copy/ListTargets()
-	// Return a list of targets that isn't the creator
-	. = ..()
-	return . - creator
+/mob/living/simple_animal/hostile/mimic/copy/CanAttack(var/atom/the_target)
+	// Never attack our creator.
+	if(the_target == creator)
+		return FALSE
+	return ..()
 
 /mob/living/simple_animal/hostile/mimic/copy/proc/ChangeOwner(var/mob/owner)
 	if(owner != creator)

@@ -70,7 +70,7 @@
 	icon_dead = "remains"
 	..(gibbed)
 
-/mob/living/simple_animal/hostile/rattlemebones/ListTargets()
+/mob/living/simple_animal/hostile/rattlemebones/CanAttack(var/atom/the_target)
 	if(!rattled)
-		return list()
+		return FALSE
 	return ..()

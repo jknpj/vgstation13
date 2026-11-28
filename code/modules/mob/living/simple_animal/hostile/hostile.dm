@@ -167,17 +167,6 @@
 //////////////HOSTILE MOB TARGETTING AND AGGRESSION////////////
 
 
-/mob/living/simple_animal/hostile/proc/ListTargets()//Step 1, find out what we can see
-	var/list/L = new()
-	if (!search_objects)
-		L.Add(ohearers(vision_range, src))
-		for (var/obj/mecha/M in mechas_list)
-			if (get_dist(M, src) <= vision_range && can_see(src, M, vision_range))
-				L.Add(M)
-	else
-		L.Add(oview(vision_range, src))
-	return L
-
 /mob/living/simple_animal/hostile/proc/FindTarget()//Step 2, filter down possible targets to things we actually care about
 	// The tree owns target acquisition. Gameplay code (cult spells, aggro
 	// propagation) still calls this to grab a target immediately, so ask the
@@ -185,9 +174,6 @@
 	if(ai_controller)
 		return ai_controller.find_target_now()
 	return null
-
-/mob/living/simple_animal/hostile/proc/Found(var/atom/A)//This is here as a potential override to pick a specific target if available
-	return
 
 /mob/living/simple_animal/hostile/proc/isValidTarget(var/atom/A)//we should have made that proc long ago instead of expanding CanAttack()
 	if(isliving(A))
@@ -199,19 +185,6 @@
 		if(SA.is_poisonous && avoids_poisonous )
 			return FALSE
 	return !loneliness_affected(A)
-
-/mob/living/simple_animal/hostile/proc/PickTarget(var/list/Targets)//Step 3, pick amongst the possible, attackable targets
-	if(target != null)//If we already have a target, but are told to pick again, calculate the lowest distance between all possible, and pick from the lowest distance targets
-		for(var/atom/A in Targets)
-			var/target_dist = get_dist(src, target)
-			var/possible_target_distance = get_dist(src, A)
-			if(target_dist < possible_target_distance)
-				Targets -= A
-	if(!Targets.len)//We didnt find nothin!
-		return
-	Targets = evaluate_list(Targets, target_rules)
-	var/chosen_target = Targets[1]//Pick the top target, as it would be highest priority
-	return chosen_target
 
 /mob/living/simple_animal/hostile/CanAttack(var/atom/the_target)//Can we actually attack a possible target?
 	if(see_invisible < the_target.invisibility)//Target's invisible to us, forget it

@@ -39,12 +39,10 @@
 		"Over 4 million pitbulls did not kill or hurt anyone today. Stop the myth.",
 		"Good with kids.")
 
-/mob/living/simple_animal/hostile/pitbull/ListTargets()
-	var/list/L = ..()
-	for(var/mob/M in L)
-		if(M in pitbulls_exclude_kinlist)
-			L.Remove(M)
-	return L
+/mob/living/simple_animal/hostile/pitbull/CanAttack(var/atom/the_target)
+	if(the_target in pitbulls_exclude_kinlist)
+		return FALSE
+	return ..()
 
 /mob/living/simple_animal/hostile/pitbull/Life()
 	if(!treacherous)

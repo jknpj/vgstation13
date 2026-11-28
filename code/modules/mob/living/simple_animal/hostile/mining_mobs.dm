@@ -985,11 +985,6 @@
 	new /obj/item/clothing/gloves/mining(src.loc)
 	new /obj/structure/boulder(src.loc)
 
-/mob/living/simple_animal/hostile/asteroid/rockernaut/boss/MoveToTarget()
-	if(charging)
-		return
-	..()
-
 /mob/living/simple_animal/hostile/asteroid/rockernaut/boss/Goto(var/target, var/delay, var/minimum_distance)
 	if(charging && !isturf(target))
 		return

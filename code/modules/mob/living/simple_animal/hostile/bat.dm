@@ -60,10 +60,10 @@
 	if(target)
 		emote("me",, "flutters towards [target]!")
 
-/mob/living/simple_animal/hostile/scarybat/Found(var/atom/A) //This is here as a potential override to pick a specific target if available
-	if(!istype(A, /mob/living))
+/mob/living/simple_animal/hostile/scarybat/CanAttack(var/atom/the_target) //Targets are only living mobs, and never our vampire allies
+	if(!istype(the_target, /mob/living))
 		return FALSE
-	var/mob/living/L = A
+	var/mob/living/L = the_target
 	if (L.mind && vamp_fac)
 		for (var/R in L.mind.antag_roles)
 			if (L.mind.antag_roles[R] in vamp_fac.members)
@@ -84,13 +84,13 @@
 	supernatural = TRUE
 
 
-/mob/living/simple_animal/hostile/scarybat/cult/Found(var/atom/the_target)
+/mob/living/simple_animal/hostile/scarybat/cult/CanAttack(var/atom/the_target)
 	//IF WE ARE CULT MONSTERS (those who spawn after Nar-Sie has risen) THEN WE DON'T ATTACK CULTISTS
 	if(ismob(the_target))
 		var/mob/M = the_target
 		if(isanycultist(M))
-			return 0
-	return ..(the_target)
+			return FALSE
+	return ..()
 
 
 /mob/living/simple_animal/hostile/scarybat/cult/CanAttack(var/atom/the_target)

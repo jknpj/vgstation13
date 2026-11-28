@@ -2,29 +2,6 @@
 	var/list/enemies = list()
 	var/hostile = 0 //Reverts back into a hostile mob when toggle to 1
 
-/mob/living/simple_animal/hostile/retaliate/Found(var/atom/A)
-	if(isliving(A))
-		var/mob/living/L = A
-		if(!L.stat)
-
-			return L
-		else if(!L.reagents || !L.reagents.has_reagent(KILLERPHEROMONES))
-			enemies -= L
-	else if(istype(A, /obj/mecha))
-		var/obj/mecha/M = A
-		if(M.occupant)
-
-			return A
-
-/mob/living/simple_animal/hostile/retaliate/ListTargets()
-	if(hostile)
-		return ..()
-	if(!enemies.len)
-		return list()
-	var/list/see = ..()
-	see &= enemies // Remove all entries that aren't in enemies
-	return see
-
 /mob/living/simple_animal/hostile/retaliate/inherit_mind(mob/living/simple_animal/from)
 	..()
 

@@ -76,12 +76,10 @@
 	S.carried = spell
 	return S
 
-/mob/living/simple_animal/hostile/humanoid/wizard/doppelganger/ListTargets()
-	var/list/L = ..()
-	for(var/mob/M in L)
-		if(doppelgangers[src] == M)
-			L.Remove(M)
-	return L
+/mob/living/simple_animal/hostile/humanoid/wizard/doppelganger/CanAttack(var/atom/the_target)
+	if(doppelgangers[src] == the_target)
+		return FALSE
+	return ..()
 
 /mob/living/simple_animal/hostile/humanoid/wizard/doppelganger/melee
 	ranged = FALSE

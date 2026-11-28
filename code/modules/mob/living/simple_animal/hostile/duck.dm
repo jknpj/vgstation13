@@ -83,10 +83,9 @@
 /mob/living/simple_animal/hostile/roboduck/ex_act()
 	return
 
-/mob/living/simple_animal/hostile/roboduck/ListTargets()//Only returns those who have made themselves our enemies
-	return enemies
-
-/mob/living/simple_animal/hostile/roboduck/CanAttack(var/atom/the_target) //This should only be passed the contents of enemies, so we'll use it for filtering
+/mob/living/simple_animal/hostile/roboduck/CanAttack(var/atom/the_target) //Only attack those who have made themselves our enemies
+	if(!(the_target in enemies))
+		return FALSE
 	if(the_target.gcDestroyed)
 		enemies.Remove(the_target)
 		return 0
@@ -94,21 +93,19 @@
 	if(!.)
 		enemies.Remove(the_target)
 
-/mob/living/simple_animal/hostile/roboduck/MoveToTarget()
-	if(dying)
+/mob/living/simple_animal/hostile/roboduck/ai_target_acquired(atom/the_target)
+	if(dying || !the_target)
 		return
-	if(isturf(loc))
-		if(get_dist(src, target) >= vision_range)
-			var/list/L = view(get_turf(target), 4)
-			var/list/LL = list()
-			for(var/turf/T in L)
-				if(T.density || (locate(/obj/machinery/door) in T.contents) || (locate(/obj/structure/window) in T.contents))
-					continue
-				LL.Add(T)
-			if(LL.len)
-				var/turf/T = get_turf(pick(LL)) //Gets a turf in view of the target, that does not have dense structures on it that could impede movement
-				do_teleport(src, T, 1, asoundout = 'sound/misc/roboquack.ogg')
-	..()
+	if(isturf(loc) && get_dist(src, the_target) >= vision_range)
+		var/list/L = view(get_turf(the_target), 4)
+		var/list/LL = list()
+		for(var/turf/T in L)
+			if(T.density || (locate(/obj/machinery/door) in T.contents) || (locate(/obj/structure/window) in T.contents))
+				continue
+			LL.Add(T)
+		if(LL.len)
+			var/turf/T = get_turf(pick(LL)) //A turf in view of the target, without dense structures that could impede movement
+			do_teleport(src, T, 1, asoundout = 'sound/misc/roboquack.ogg')
 
 /mob/living/simple_animal/hostile/roboduck/OpenFire()
 	set waitfor = 0

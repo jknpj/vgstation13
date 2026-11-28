@@ -101,13 +101,9 @@
 		else
 			hud_used.spiderling_growth_display.maptext = "<div align='center' valign='middle' style='position:relative; top:0px; left:6px'>Growth:<br><font color='#FFFF00'>[min(amount_grown,100)]%</font></div>"
 
-/mob/living/simple_animal/hostile/giant_spider/spiderling/GiveTarget(var/new_target)
-	if(ai_controller)
-		return ..()
-	. = ..()
-	var/atom/flee_from = new_target
-	if(isliving(flee_from) && (ishuman(flee_from)||isrobot(flee_from)) && !isMoMMI(flee_from))
-		visible_message("<span class='danger'>The [src.name] tries to flee from [flee_from.name]!</span>")
+/mob/living/simple_animal/hostile/giant_spider/spiderling/ai_target_acquired(atom/the_target)
+	if(isliving(the_target) && (ishuman(the_target)||isrobot(the_target)) && !isMoMMI(the_target))
+		visible_message("<span class='danger'>The [src.name] tries to flee from [the_target.name]!</span>")
 
 /mob/living/simple_animal/hostile/giant_spider/spiderling/use_hostile_tree()
 	return ..(bt_spiderling_tree())

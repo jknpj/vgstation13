@@ -594,24 +594,6 @@
 			return FALSE
 	return TRUE
 
-/mob/living/simple_animal/hostile/hex/MoveToTarget()
-	if (mode == HEX_MODE_ESCORT)
-		stop_automated_movement = 1
-		if(!target || !CanAttack(target))
-			LoseTarget()
-			return
-		if(isturf(loc))
-			if(target in ListTargets())
-				dir = get_dir(src, target)
-				if(get_dist(src,target) >= 2 && ranged_cooldown <= 0)
-					OpenFire(target)
-				if(target.Adjacent(src))
-					AttackingTarget()
-				return
-		LostTarget()
-	else
-		..()
-
 /mob/living/simple_animal/hostile/hex/cultify()
 	return
 

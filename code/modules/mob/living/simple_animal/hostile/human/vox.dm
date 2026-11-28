@@ -156,16 +156,13 @@
 	search_objects = 1
 	wanted_objects = list(/obj/item/weapon/spacecash) //Gotta grab everything I can
 
-/mob/living/simple_animal/hostile/humanoid/vox/spaceraider/Found(atom/A)
-	if(istype(A,/obj/item/weapon/spacecash))
-		return TRUE
-
 /mob/living/simple_animal/hostile/humanoid/vox/spaceraider/ranged_mode() //So they don't shoot money instead of running to it and picking it up
-	if(is_type_in_list(target, wanted_objects))
+	var/atom/current_target = ai_controller ? ai_controller.blackboard[BB_TARGET] : target
+	if(is_type_in_list(current_target, wanted_objects))
 		retreat_distance = null
 		minimum_distance = 1
 		return FALSE
-	if(isliving(target))
+	if(isliving(current_target))
 		retreat_distance = noloot_retreat
 		minimum_distance = noloot_minimum
 	return ..()

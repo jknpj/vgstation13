@@ -155,7 +155,7 @@ var/list/nest_locations = list()
 			return dragging
 	var/list/Preys = list()
 	var/Prey
-	for(var/atom/A in ListTargets())
+	for(var/atom/A in oview(vision_range, src))
 		if(istype(A,/mob/living/carbon/monkey))
 			var/mob/living/carbon/monkey/M = A
 			if(!M.client && !M.locked_to && !(M.flags & INVULNERABLE))
