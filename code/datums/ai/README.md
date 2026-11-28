@@ -430,7 +430,10 @@ searching and clears the blackboard, object searching is restored once nothing
 is left, `spin_cocoon()` does not nest cocoons, and a held snack stays reachable
 through its holder.
 
-The auxtools scenario lives outside the repository (local harness):
+The auxtools scenario lives outside the repository (local harness): the same
+harness includes a **legacy-vs-tree parity run** (`D:\tools\auxtools\parity.ps1`,
+local; runs the same DM scenario on the pre-port ref and on this branch and
+diffs melee cadence, cocoon count, the parrot steal and the damage retarget).
 build a sequence/selector/decorator/subtree, tick it across RUNNING/SUCCESS/
 FAILURE, exercise the descriptor builder, cancel a running leaf, possess a mob,
 verify sentience login/logout and high/low subsystem routing (per-z buckets),
