@@ -30,6 +30,15 @@
 	for(var/key in config)
 		vars[key] = config[key]
 
+/// Returns TRUE while an existing target is still inside the pawn's view. Legacy
+/// `AttackTarget()` dropped anything missing from `ListTargets()`; a target put
+/// inside a cocoon, locker or mecha must be dropped too. Sources that track
+/// contained targets (a snack in someone's hand) override this.
+/datum/target_source/proc/is_reachable_target(datum/ai_controller/controller, mob/living/pawn, atom/existing, search_range)
+	if(!existing || !pawn || QDELETED(existing) || QDELETED(pawn))
+		return FALSE
+	return existing in oview(search_range, pawn)
+
 /// Returns TRUE while this source still considers the stored target valid.
 /datum/target_source/proc/is_valid_target(datum/ai_controller/controller, mob/living/pawn, atom/existing)
 	return TRUE
@@ -176,6 +185,14 @@
 
 /datum/target_source/food/is_valid_target(datum/ai_controller/controller, mob/living/pawn, atom/existing)
 	return istype(existing, /obj/item/weapon/reagent_containers/food/snacks) && !QDELETED(existing)
+
+/datum/target_source/food/is_reachable_target(datum/ai_controller/controller, mob/living/pawn, atom/existing, search_range)
+	if(!existing || !pawn || QDELETED(existing) || QDELETED(pawn))
+		return FALSE
+	var/atom/holder = existing.loc
+	if(isliving(holder))//A held snack is visible through the mob holding it.
+		return holder in oview(search_range, pawn)
+	return ..()
 
 /// Follows someone's point emote. The pointer target is picked and the pointing
 /// mob is stored back on a corgi pawn so the reaction can tell friend from foe.

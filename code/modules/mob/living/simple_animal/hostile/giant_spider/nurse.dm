@@ -171,12 +171,15 @@
 /mob/living/simple_animal/hostile/giant_spider/nurse/proc/spin_cocoon(var/atom/cocoon_target)
 	if (!cocoon_target)
 		return
-	if(locate(/obj/effect/spider/cocoon) in cocoon_target.loc)
+	var/turf/target_turf = get_turf(cocoon_target)
+	// The target ends up inside the cocoon, so checking cocoon_target.loc misses
+	// the cocoon on every retry and nests them forever; check the turf instead.
+	if(!target_turf || istype(cocoon_target.loc, /obj/effect/spider/cocoon) || (locate(/obj/effect/spider/cocoon) in target_turf))
 		return
 	visible_message("<span class='notice'>\The [src] begins to secrete a sticky substance around \the [cocoon_target].</span>")
 	stop_automated_movement = 1
 	if(do_after(src,cocoon_target, 50))
-		var/obj/effect/spider/cocoon/C = new(cocoon_target.loc)
+		var/obj/effect/spider/cocoon/C = new(target_turf)
 		var/suffix = ""
 		C.pixel_x = cocoon_target.pixel_x
 		C.pixel_y = cocoon_target.pixel_y

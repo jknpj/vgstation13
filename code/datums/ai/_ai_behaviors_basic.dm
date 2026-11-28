@@ -261,6 +261,11 @@
 	var/datum/target_source/source = get_target_source()
 	if(!source)
 		return TRUE
+	// Legacy AttackTarget(): if(!(target in ListTargets())) LostTarget(). A target
+	// that left the view or was put inside a container (a cocoon, a locker) has to
+	// be dropped instead of being attacked forever.
+	if(!source.is_reachable_target(controller, controller.pawn, existing, search_range))
+		return FALSE
 	return source.is_valid_target(controller, controller.pawn, existing)
 
 /datum/bt_node/ai_behavior/acquire_target/perform(seconds_per_tick, datum/ai_controller/controller)
