@@ -728,7 +728,8 @@
 		return TRUE
 	if(controller.ai_movement.needs_repath(controller, target) && !controller.ai_movement.start_moving_towards(controller, target, max_distance))
 		return FALSE
-	return controller.ai_movement.process(controller)
+	// SSai_movement flies the path; fly_to() only keeps it fresh.
+	return TRUE
 
 /// Stops the adapter's flight path. Fleeing, perching and wandering use the
 /// legacy walk/step and must not fight the adapter for movement.

@@ -45,6 +45,8 @@ are out of scope.
 - `_ai_movement.dm`: basic `get_path_to()` walker with a greedy step fallback
   while the pathfinder subsystem is not ready or has no route. Caches the path
   per controller/target and repaths after `repath_after` steps or a target change.
+  The path is stepped by `SSai_movement` (a ticker subsystem), never by the
+  planning tick.
 - `_ai_target_sources.dm`: `target_source` base plus `enemies` (closest pick,
   legacy distance rule, `isValidTarget()`/`CanAttack()` filters, plus wanted
   objects while the pawn still searches for them), `enemies/wounded` (weakest
@@ -274,17 +276,19 @@ childless and it fails every tick.
 - **Simplified movement.** `ai_movement/basic` uses `get_path_to()` with a
   per-controller path cache. If `SSpathfinder.mobs` is not initialized or
   returns no route, it falls back to one greedy step instead of runtiming. That
-  fallback has no obstacle avoidance: a blocked step fails the movement leaf and
-  the tree retries on the next tick, so a pawn can stall on a single blocker.
+  fallback has no obstacle avoidance: a blocked step is reported through
+  `take_blocked()`, the movement leaf fails and the tree retries or smashes on
+  the next planning tick, so a pawn can stall on a single blocker.
 - **Starter hostile behavior only.** The shared trees have acquire/move/attack,
   plus opt-in flee (`bt_fleeing_hostile_tree`), ranged combat with
   retreat/hold (`bt_ranged_hostile_tree`) and `speak_line`. Chatting leaves
   should pass explicit lines when the mob keeps legacy `handle_automated_speech()`
   to avoid double-speaking.
 - **Ranged stance is selector-based.** The ranged tree evaluates melee, retreat,
-  ability and hold in order; it cannot attack and back off on the same tick the
-  way legacy `MoveToTarget()` does. A cornered ranged mob melees instead of
-  failing to retreat.
+  ability, chase to `minimum_distance` and the shared combat tree in order; it
+  cannot attack and back off on the same tick the way legacy `MoveToTarget()`
+  does. A cornered ranged mob melees instead of failing to retreat, and a mob
+  without `retreat_distance` (the goliath) keeps closing until it can punch.
 - **Environment smashing is a fallback branch.** It calls the legacy
   `DestroySurroundings()` on a 2 second cooldown, only after the chase branch
   failed to move. It does not replace the legacy `EscapeConfinement()` loop.
@@ -388,11 +392,14 @@ deciding *and* maintaining state. Keep these rules when touching a migrated mob:
   the target lives inside the cocoon.
 - **One movement system per mob.** Migrated pawns use `controller.ai_movement`;
   `start_walk_to()` (greedy `walk_to`, no pathfinding) is only for the documented
-  legacy exceptions. The adapter moves at the legacy rate: `move_to_delay` is in
-  world ticks, so it accumulates real time (`get_step_interval()`) and can take
-  several steps in one 1 s planning tick. A mob that keeps the greedy walk
-  handles "cannot reach it" itself: the parrot skips a target it failed to reach
-  for `PARROT_UNREACHABLE_COOLDOWN`.
+  legacy exceptions. Leaves only start/refresh the path; `SSai_movement` (a
+  `SS_TICKER` subsystem, one fire per world tick) spends at most one step per
+  tick at the legacy rate (`get_step_interval()` = `move_to_delay` world ticks).
+  Never move several tiles inside one planning tick: that is a teleport to every
+  observer. A blocked step drops the path and sets `take_blocked()`, so the tree
+  can fall through to `smash_surroundings` instead of retrying the wall. A mob
+  that keeps the greedy walk handles "cannot reach it" itself: the parrot skips a
+  target it failed to reach for `PARROT_UNREACHABLE_COOLDOWN`.
 - **The z gate is a deliberate optimization.** Only z levels with a client are
   ticked; controllers on unobserved z levels are skipped because nobody can see
   them act. The lobby mob reports z = 0, so no AI runs before a round starts

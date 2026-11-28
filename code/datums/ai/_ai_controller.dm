@@ -142,6 +142,10 @@
 
 	ai_status = new_status
 	if(ai_status == AI_STATUS_OFF)
+		// A dead/unpossessed pawn must not keep walking: the movement ticker is
+		// independent of the plan tick, so stop it explicitly as well.
+		if(ai_movement)
+			ai_movement.stop_moving_towards(src)
 		cancel_current_plan()
 	return TRUE
 

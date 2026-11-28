@@ -212,10 +212,16 @@
 				min_distance = min_distance,
 				max_distance = max_distance,
 			),
+			// Legacy MoveToTarget() kept closing to the pawn's own minimum
+			// distance while the attack was on cooldown. Holding position here
+			// left goliaths (no retreat distance, minimum 1) standing at range
+			// and never punching, so the chase reads minimum_distance at runtime.
 			list(
-				BT_DESC_TYPE = /datum/bt_node/ai_behavior/hold_position,
-				min_distance = min_distance,
-				max_distance = max_distance,
+				BT_DESC_TYPE = /datum/bt_node/composite/sequence,
+				BT_DESC_CHILDREN = list(
+					list(BT_DESC_TYPE = /datum/bt_node/ai_behavior/acquire_target),
+					list(BT_DESC_TYPE = /datum/bt_node/ai_behavior/move_to_target),
+				),
 			),
 			bt_hostile_combat_tree(),
 		),
@@ -349,7 +355,14 @@
 		chase_target = null
 		return AI_BEHAVIOR_FAILED
 
-	if(get_dist(pawn, target) <= 1)
+	// Legacy MoveToTarget() chased to the pawn's minimum_distance, not to
+	// adjacency: ranged mobs keep their spacing while the attack cools down.
+	var/stop_distance = 1
+	if(istype(pawn, /mob/living/simple_animal/hostile))
+		var/mob/living/simple_animal/hostile/hostile_pawn = pawn
+		if(hostile_pawn.ranged_mode() && hostile_pawn.minimum_distance > stop_distance)
+			stop_distance = hostile_pawn.minimum_distance
+	if(get_dist(pawn, target) <= stop_distance)
 		if(controller.ai_movement)
 			controller.ai_movement.stop_moving_towards(controller)
 		return AI_BEHAVIOR_SUCCEEDED
@@ -357,14 +370,18 @@
 	if(!controller.ai_movement)
 		return AI_BEHAVIOR_FAILED
 
+	// A blocked step is consumed once so the selector can try the smash branch
+	// instead of retrying the same wall forever.
+	if(controller.ai_movement.take_blocked(controller))
+		return AI_BEHAVIOR_FAILED
+
 	// The pathfinder fallback is a single greedy step, so recompute whenever the
 	// moved path runs out; this also recovers from a target that moved.
 	if(controller.ai_movement.needs_repath(controller, target) && !controller.ai_movement.start_moving_towards(controller, target, max_distance))
 		return AI_BEHAVIOR_FAILED
 
-	if(!controller.ai_movement.process(controller))
-		return AI_BEHAVIOR_FAILED
-
+	// SSai_movement steps the pawn at the legacy rate; this leaf only keeps the
+	// path fresh and yields until the target is in range.
 	return AI_BEHAVIOR_DELAY
 
 /datum/bt_node/ai_behavior/move_to_target/finish_action(datum/ai_controller/controller, succeeded)
@@ -491,12 +508,12 @@
 	var/turf/flee_turf = get_edge_target_turf(pawn, away_dir)
 	if(!flee_turf)
 		return AI_BEHAVIOR_FAILED
+	if(controller.ai_movement.take_blocked(controller))
+		return AI_BEHAVIOR_FAILED
 	if(controller.ai_movement.needs_repath(controller, flee_turf) && !controller.ai_movement.start_moving_towards(controller, flee_turf, max_distance))
 		return AI_BEHAVIOR_FAILED
 
-	if(!controller.ai_movement.process(controller))
-		return AI_BEHAVIOR_FAILED
-
+	// SSai_movement advances the flee; the leaf just keeps the path fresh.
 	return AI_BEHAVIOR_DELAY
 
 /datum/bt_node/ai_behavior/flee_target/finish_action(datum/ai_controller/controller, succeeded)
@@ -557,10 +574,11 @@
 	var/turf/flee_turf = get_edge_target_turf(pawn, away_dir)
 	if(!flee_turf)
 		return AI_BEHAVIOR_FAILED
+	if(controller.ai_movement.take_blocked(controller))
+		return AI_BEHAVIOR_FAILED
 	if(controller.ai_movement.needs_repath(controller, flee_turf) && !controller.ai_movement.start_moving_towards(controller, flee_turf, max_distance))
 		return AI_BEHAVIOR_FAILED
-	if(!controller.ai_movement.process(controller))
-		return AI_BEHAVIOR_FAILED
+	// SSai_movement advances the flee; the leaf just keeps the path fresh.
 	return AI_BEHAVIOR_DELAY
 
 /datum/bt_node/ai_behavior/flee_hazard/finish_action(datum/ai_controller/controller, succeeded)
@@ -658,25 +676,6 @@
 	if(result & AI_BEHAVIOR_SUCCEEDED)
 		ability.start_cooldown(controller)
 	return result
-
-/// Does nothing for a tick when the target is inside the ability's range but the
-/// ability is not ready. Returning SUCCESS lets the selector re-check next tick
-/// instead of walking the pawn into melee.
-/datum/bt_node/ai_behavior/hold_position
-	var/target_key = BB_TARGET
-	var/min_distance = 1
-	var/max_distance = 7
-
-/datum/bt_node/ai_behavior/hold_position/setup(datum/ai_controller/controller)
-	var/atom/target = controller.blackboard[target_key]
-	var/mob/living/pawn = controller.pawn
-	if(!target || QDELETED(target) || !pawn || QDELETED(pawn))
-		return FALSE
-	var/distance = get_dist(pawn, target)
-	return distance > min_distance && distance <= max_distance
-
-/datum/bt_node/ai_behavior/hold_position/perform(seconds_per_tick, datum/ai_controller/controller)
-	return AI_BEHAVIOR_SUCCEEDED
 
 /// Breaks obstacles in the pawn's way through the legacy DestroySurroundings().
 /// Only useful for hostile mobs; other pawns fail the branch.
@@ -837,10 +836,11 @@
 
 	if(!controller.ai_movement)
 		return AI_BEHAVIOR_FAILED
+	if(controller.ai_movement.take_blocked(controller))
+		return AI_BEHAVIOR_FAILED
 	if(controller.ai_movement.needs_repath(controller, target) && !controller.ai_movement.start_moving_towards(controller, target, max_distance))
 		return AI_BEHAVIOR_FAILED
-	if(!controller.ai_movement.process(controller))
-		return AI_BEHAVIOR_FAILED
+	// SSai_movement steps the pawn; the hunt leaf only keeps the path fresh.
 	return AI_BEHAVIOR_DELAY
 
 /datum/bt_node/ai_behavior/hunt_target/finish_action(datum/ai_controller/controller, succeeded)
@@ -881,10 +881,11 @@
 
 	if(!controller.ai_movement)
 		return AI_BEHAVIOR_FAILED
+	if(controller.ai_movement.take_blocked(controller))
+		return AI_BEHAVIOR_FAILED
 	if(controller.ai_movement.needs_repath(controller, leader) && !controller.ai_movement.start_moving_towards(controller, leader, max_distance))
 		return AI_BEHAVIOR_FAILED
-	if(!controller.ai_movement.process(controller))
-		return AI_BEHAVIOR_FAILED
+	// SSai_movement steps the pawn; the leaf only keeps the path fresh.
 	return AI_BEHAVIOR_DELAY
 
 /datum/bt_node/ai_behavior/follow_leader/finish_action(datum/ai_controller/controller, succeeded)

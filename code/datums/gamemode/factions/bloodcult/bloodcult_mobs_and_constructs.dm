@@ -444,9 +444,9 @@
 		return AI_BEHAVIOR_FAILED
 	if (get_turf(hex) == anchor)
 		return AI_BEHAVIOR_SUCCEEDED
-	if (controller.ai_movement.needs_repath(controller, anchor) && !controller.ai_movement.start_moving_towards(controller, anchor, 50))
+	if (controller.ai_movement.take_blocked(controller))
 		return AI_BEHAVIOR_FAILED
-	if (!controller.ai_movement.process(controller))
+	if (controller.ai_movement.needs_repath(controller, anchor) && !controller.ai_movement.start_moving_towards(controller, anchor, 50))
 		return AI_BEHAVIOR_FAILED
 	return AI_BEHAVIOR_DELAY
 
@@ -483,9 +483,9 @@
 	if (hex.z != hex.guard_spot.z || get_dist(hex, hex.guard_spot) >= 50)
 		hex.guard_spot = get_turf(hex)
 		return AI_BEHAVIOR_FAILED
-	if (controller.ai_movement.needs_repath(controller, hex.guard_spot) && !controller.ai_movement.start_moving_towards(controller, hex.guard_spot, 50))
+	if (controller.ai_movement.take_blocked(controller))
 		return AI_BEHAVIOR_FAILED
-	if (!controller.ai_movement.process(controller))
+	if (controller.ai_movement.needs_repath(controller, hex.guard_spot) && !controller.ai_movement.start_moving_towards(controller, hex.guard_spot, 50))
 		return AI_BEHAVIOR_FAILED
 	return AI_BEHAVIOR_DELAY
 

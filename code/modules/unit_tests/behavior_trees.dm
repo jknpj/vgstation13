@@ -162,12 +162,121 @@
 
 	// move_to_delay is in world ticks, exactly like walk_to()/Goto() before the
 	// port, so the adapter interval is move_to_delay * world.tick_lag.
-	var/expected = max(1, 2 * world.tick_lag)
+	var/expected = 2 * world.tick_lag
 	var/actual = movement.get_step_interval(controller)
 	if(abs(actual - expected) > 0.001)
 		fail("step interval [actual] does not match the legacy [expected] for move_to_delay 2")
 	qdel(controller)
 	qdel(B)
+
+/// The movement adapter must never spend more than one step in a single world
+/// tick: the old step-credit loop turned a whole second of walking into an
+/// instant teleport during the planning tick.
+/datum/unit_test/behavior_tree_movement_no_burst/start()
+	// Other tests qdel mobs between ticks; a deferred qdel still blocks its turf,
+	// so look for a pair that is actually clear instead of trusting the type.
+	var/turf/from_turf = null
+	var/turf/to_turf = null
+	for(var/turf/T in block(locate(1, 1, 1), locate(world.maxx, world.maxy, 1)))
+		if(!istype(T, /turf/simulated/floor) || is_blocked_turf(T))
+			continue
+		var/turf/E = get_step(T, EAST)
+		if(E && istype(E, /turf/simulated/floor) && !is_blocked_turf(E))
+			from_turf = T
+			to_turf = E
+			break
+	if(!from_turf)
+		return fail("no clear floor pair on z1")
+	var/mob/living/simple_animal/hostile/bear/B = new(from_turf)
+	B.move_to_delay = 2
+	var/datum/ai_controller/controller = new(B)
+	var/datum/ai_movement/basic/movement = controller.ai_movement
+	if(!istype(movement) || !SSpathfinder)
+		qdel(controller)
+		qdel(B)
+		return fail("the movement adapter or the pathfinder subsystem is missing")
+
+	if(!movement.start_moving_towards(controller, to_turf))
+		qdel(controller)
+		qdel(B)
+		return fail("the adapter could not start moving")
+	if(!(controller in ai_movement_active))
+		qdel(controller)
+		qdel(B)
+		return fail("the moving controller was not registered with SSai_movement")
+
+	// The path may start one tile away; a map mob can also wander onto the
+	// destination while get_path_to() stoplag()s, so do not require the Move to
+	// succeed. The invariant is that only one step is attempted per tick.
+	var/moved_first = movement.process(controller)
+	var/next_due = movement.next_step_time[controller]
+	var/turf/after_first = get_turf(B)
+	var/moved_second = movement.process(controller)
+	var/turf/after_second = get_turf(B)
+	var/failure = null
+	if(isnull(next_due) || next_due <= world.time)
+		failure = "the adapter did not schedule the next step for a later tick"
+	else if(moved_second || after_second != after_first)
+		failure = "the adapter spent more than one step in the same world tick"
+	else if(!moved_first && !movement.take_blocked(controller))
+		failure = "a refused step neither moved the pawn nor reported a blocker"
+
+	movement.stop_moving_towards(controller)
+	if(controller in ai_movement_active)
+		failure = failure || "stop_moving_towards() left the controller in the movement ticker"
+	qdel(controller)
+	qdel(B)
+	if(failure)
+		fail(failure)
+
+/// Ranged mobs keep the legacy chase: a goliath with no retreat distance has to
+/// close in while its tentacle attack cools down, not hold position at range.
+/datum/unit_test/behavior_tree_ranged_chases_to_min_distance/start()
+	var/turf/base = null
+	var/turf/prey_turf = null
+	for(var/turf/T in block(locate(1, 1, 1), locate(world.maxx, world.maxy, 1)))
+		if(!istype(T, /turf/simulated/floor) || T.density)
+			continue
+		var/turf/candidate = T
+		var/clear = TRUE
+		for(var/i in 1 to 4)
+			candidate = get_step(candidate, EAST)
+			if(!candidate || !istype(candidate, /turf/simulated/floor) || is_blocked_turf(candidate))
+				clear = FALSE
+				break
+		if(clear)
+			base = T
+			prey_turf = candidate
+			break
+	if(!base)
+		return fail("no clear four-tile corridor on z1")
+
+	var/mob/living/simple_animal/hostile/asteroid/goliath/goliath = new(base)
+	var/mob/living/carbon/monkey/prey = new(prey_turf)
+	prey.maxHealth = 1000000
+	prey.health = 1000000
+	var/datum/ai_controller/controller = goliath.ai_controller
+	// Lazy controller install happens on the first Life(); do it explicitly so a
+	// missing tree fails here instead of being hidden by a null check.
+	if(!controller)
+		controller = goliath.use_hostile_tree()
+	goliath.GiveTarget(prey)
+	// The first tick may take the ranged attack branch; the second must chase.
+	controller.SelectBehaviors(1)
+	controller.SelectBehaviors(1)
+
+	var/failure = null
+	if(get_dist(goliath, prey) <= goliath.minimum_distance)
+		failure = "the test setup put the prey inside minimum_distance"
+	else if(!controller.ai_movement.has_path(controller) && !(controller in ai_movement_active))
+		failure = "the ranged goliath held position instead of chasing"
+
+	controller.ai_movement.stop_moving_towards(controller)
+	qdel(controller)
+	qdel(prey)
+	qdel(goliath)
+	if(failure)
+		fail(failure)
 
 /datum/unit_test/behavior_tree_pathfinder_budget/start()
 	var/list/pair = unit_test_bt_floor_pair()
