@@ -435,6 +435,7 @@
 
 /datum/bt_node/ai_behavior/parrot_action/proc/stop_flying(mob/living/simple_animal/parrot/parrot)
 	walk(parrot, 0)
+	parrot.cancel_flight_path()
 
 /// Flee from whatever hurt the parrot.
 /datum/bt_node/ai_behavior/parrot_action/parrot_flee
@@ -453,6 +454,7 @@
 		parrot.parrot_interest = null
 		parrot.parrot_state = PARROT_WANDER
 		return AI_BEHAVIOR_SUCCEEDED
+	parrot.cancel_flight_path()
 	walk_away(parrot, threat, 1, parrot.parrot_speed)
 	parrot.isStuck()
 	return AI_BEHAVIOR_SUCCEEDED
@@ -496,7 +498,7 @@
 		victim.attack_animal(parrot)
 		return AI_BEHAVIOR_SUCCEEDED
 
-	parrot.start_walk_to(victim, 1, parrot.parrot_speed)
+	parrot.fly_to(victim)
 	parrot.isStuck()
 	return AI_BEHAVIOR_SUCCEEDED
 
@@ -530,7 +532,7 @@
 		parrot.parrot_state = PARROT_SWOOP | PARROT_RETURN
 		return AI_BEHAVIOR_SUCCEEDED
 
-	parrot.start_walk_to(interest, 1, parrot.parrot_speed)
+	parrot.fly_to(interest)
 	parrot.isStuck()
 	return AI_BEHAVIOR_SUCCEEDED
 
@@ -557,7 +559,7 @@
 		parrot.parrot_state = PARROT_PERCH
 		parrot.icon_state = "parrot_sit"
 		return AI_BEHAVIOR_SUCCEEDED
-	parrot.start_walk_to(parrot.parrot_perch, 1, parrot.parrot_speed)
+	parrot.fly_to(parrot.parrot_perch)
 	parrot.isStuck()
 	return AI_BEHAVIOR_SUCCEEDED
 
@@ -710,6 +712,29 @@
 		return TRUE
 	parrot_ignored -= AM
 	return FALSE
+
+/// Flies with the controller's pathfinding adapter instead of the legacy greedy
+/// walk_to. The adapter's default step interval is the same 5 world ticks as
+/// parrot_speed, so the flight speed is unchanged, but it routes around walls and
+/// glass instead of pressing into them. Without a controller (test-only) it keeps
+/// the old greedy walk.
+/mob/living/simple_animal/parrot/proc/fly_to(atom/target, max_distance = 30)
+	if(!target)
+		return FALSE
+	walk(src, 0)
+	var/datum/ai_controller/controller = ai_controller
+	if(!controller || !controller.ai_movement)
+		start_walk_to(target, 1, parrot_speed)
+		return TRUE
+	if(controller.ai_movement.needs_repath(controller, target) && !controller.ai_movement.start_moving_towards(controller, target, max_distance))
+		return FALSE
+	return controller.ai_movement.process(controller)
+
+/// Stops the adapter's flight path. Fleeing, perching and wandering use the
+/// legacy walk/step and must not fight the adapter for movement.
+/mob/living/simple_animal/parrot/proc/cancel_flight_path()
+	if(ai_controller && ai_controller.ai_movement)
+		ai_controller.ai_movement.stop_moving_towards(ai_controller)
 
 /mob/living/simple_animal/parrot/proc/search_for_item()
 	for(var/atom/movable/AM in view(src))
